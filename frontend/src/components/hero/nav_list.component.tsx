@@ -33,13 +33,19 @@ const NavListComponent: React.FC<INavListComponentProps> = ({
             </a>
             <a href="/" className="text-gray-400 hover:text-custom transition">
               HOME
-            </a>
-            <a
-              href="/explore"
+            </Link>
+            <Link
+              to="/explore"
               className="text-gray-400 hover:text-custom transition"
             >
               EXPLORE
-            </a>
+            </Link>
+            <Link
+              to="/community"
+              className="text-gray-400 hover:text-custom transition"
+            >
+              COMMUNITY
+            </Link>
             {/* <a
               href="/categories"
               className="text-gray-400 hover:text-custom transition"
@@ -47,12 +53,12 @@ const NavListComponent: React.FC<INavListComponentProps> = ({
               CATEGORIES
             </a> */}
             {isLogin && (
-              <a
-                href="/dashboard"
+              <Link
+                to="/dashboard"
                 className="text-gray-400 hover:text-custom transition"
               >
                 DASHBOARD
-              </a>
+              </Link>
             )}
           </div>
         </div>

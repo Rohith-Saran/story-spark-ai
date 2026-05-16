@@ -83,7 +83,7 @@ const ExploreComponent = () => {
               <input
                 type="text"
                 placeholder="Search title, tag..."
-                className="w-full pl-12 pr-4 py-2 text-base text-indigo-600 bg-blue-500/10 border outline-1 -outline-offset-1 outline-indigo-600 rounded-md focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+                className="w-full pl-12 pr-4 py-2 text-base text-gray-200 placeholder-gray-400 bg-blue-500/10 border outline-1 -outline-offset-1 outline-indigo-600 rounded-md focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -204,7 +204,7 @@ const ExploreComponent = () => {
                   </h2>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <label className="text-sm text-gray-600">Show</label>
+                  <label className="text-sm text-gray-400">Show</label>
                   <select
                     className="!rounded-button border-gray-600 text-sm focus:border-custom focus:ring-custom bg-gray-800 text-gray-500"
                     value={size}
@@ -218,7 +218,7 @@ const ExploreComponent = () => {
                     <option value={50}>50</option>
                     <option value={100}>100</option>
                   </select>
-                  <span className="text-sm text-gray-600">entries</span>
+                  <span className="text-sm text-gray-400">entries</span>
                 </div>
               </div>
               {featuredPost && <ExploreFeatureComponent />}

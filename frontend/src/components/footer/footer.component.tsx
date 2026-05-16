@@ -1,4 +1,5 @@
 
+import { Link } from "react-router-dom";
 import logo from "../../assets/logoNew.png";
 
 const FooterComponent = () => {
@@ -84,6 +85,15 @@ const FooterComponent = () => {
                 >
                   Help Center
                 </a>
+              </li>
+
+              <li>
+                <Link
+                  to="/community"
+                  className="text-base text-gray-400 hover:text-white transition-colors duration-200"
+                >
+                  Community
+                </Link>
               </li>
 
               <li>
