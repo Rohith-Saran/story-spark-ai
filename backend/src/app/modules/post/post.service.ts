@@ -89,7 +89,7 @@ const getPosts = async (
   }
 
   if (sortBy && orderBy) {
-    sortCondition[sortBy] = orderBy;
+    sortCondition[sortBy] = orderBy === "asc" ? 1 : -1;
   }
 
   const result = await Post.find(whereCondition)
