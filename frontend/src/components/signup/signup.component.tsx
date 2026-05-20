@@ -48,7 +48,12 @@ const SignUpComponent = () => {
   const [emailVerify] = useEmailVerifyMutation();
   const [verifyOtp] = useVerifyOtpMutation();
   const [registerUser] = useRegisterUserMutation();
-  const { register, handleSubmit, watch } = useForm<Inputs>();
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<Inputs>({ mode: "onChange" });
   const [isBusy, setIsBusy] = useState<boolean>(false);
   const [showOtpField, setShowOtpField] = useState<boolean>(false);
   const [registerInfo, setRegisterInfo] = useState<IRegisterInfo>();
@@ -181,6 +186,19 @@ const SignUpComponent = () => {
               required={true}
               icon="fas fa-user"
               register={register}
+              validation={{
+                required: "Name is required",
+                minLength: {
+                  value: 8,
+                  message: "Name must be at least 8 characters",
+                },
+                pattern: {
+                  value: /^[A-Za-z0-9._]+$/,
+                  message:
+                    "Only letters, numbers, underscores, and dots are allowed",
+                },
+              }}
+              error={errors.name}
             />
 
             <SSInput
@@ -191,6 +209,7 @@ const SignUpComponent = () => {
               required={true}
               icon="fas fa-envelope"
               register={register}
+              error={errors.email}
             />
 
             <SSInput
@@ -201,6 +220,7 @@ const SignUpComponent = () => {
               required={true}
               icon="fas fa-lock"
               register={register}
+              error={errors.password}
             />
 
             <p className="text-xs text-gray-500 -mt-2">
@@ -216,6 +236,7 @@ const SignUpComponent = () => {
               required={true}
               icon="fas fa-eye"
               register={register}
+              error={errors.confirmPassword}
             />
 
             <SSButton
