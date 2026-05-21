@@ -36,27 +36,43 @@ const ExploreViewListComponent: React.FC<IExploreViewListComponentProps> = ({
   }
   return (
     <div>
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
         {posts.length > 0 ? (
           posts.map((story) => (
             <div
               key={story._id}
               onClick={() => navigate(`/post/${story._id}`)}
-              className="cursor-pointer bg-blue-500/10 rounded-lg shadow-sm overflow-hidden group"
+              className="cursor-pointer bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden group flex flex-col h-full"
             >
-              <img src={story.imageURL} className="w-full h-36 object-cover" />
-              <div className="p-2">
-                <div className="flex items-center mb-2">
-                  <span className="bg-pink-200 text-pink-600 px-2 py-1 rounded text-xs">
+              <div className="relative overflow-hidden">
+                <img src={story.imageURL} alt={`Cover image for ${story.title}`} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent opacity-60 pointer-events-none"></div>
+                <span className="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-md border border-slate-600 text-blue-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg">
                     {story.tag}
                   </span>
-                </div>
-                <h3 className="font-semibold mb-1 text-gray-400">
+              </div>
+              <div className="p-6 flex-1 flex flex-col">
+                <h3 className="font-bold text-lg mb-2 text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-1">
                   {story.title}
                 </h3>
-                <p className="text-sm text-gray-500 mb-2">
-                  {story.content.slice(0, 60)}
+                <p className="text-sm text-slate-400 mb-6 line-clamp-2 flex-1 leading-relaxed">
+                  {story.content.slice(0, 100)}...
                 </p>
+<<<<<<< HEAD
+                <div className="flex items-center justify-between text-sm text-slate-500 border-t border-slate-700/50 pt-4 mt-auto">
+                  <div className="flex items-center gap-4">
+                    <button className="flex items-center gap-1.5 hover:text-red-400 transition-colors group/btn" aria-label="Like story">
+                      <i className="far fa-heart group-hover/btn:scale-110 transition-transform" aria-hidden="true"></i>{" "}
+                      <span className="font-medium">{story.likesCount}</span>
+                  </button>
+                    <button className="flex items-center gap-1.5 hover:text-blue-400 transition-colors group/btn" aria-label="Comment on story">
+                      <i className="far fa-comment group-hover/btn:scale-110 transition-transform" aria-hidden="true"></i>{" "}
+                      <span className="font-medium">{story.commentsCount}</span>
+                  </button>
+                  </div>
+                  <button className="hover:text-blue-400 transition-colors" aria-label="Bookmark story">
+                    <i className="far fa-bookmark"></i>
+=======
                 <div className="flex items-center text-sm text-gray-500">
                   <button 
                     onClick={(e) => handleLike(e, story._id as string)}
@@ -72,6 +88,7 @@ const ExploreViewListComponent: React.FC<IExploreViewListComponentProps> = ({
                   <button className="ml-2 !rounded-button flex items-center space-x-1 cursor-pointer hover:text-gray-400 border px-3 py-1">
                     <i className="far fa-comment"></i>
                     <span>{story.commentsCount || 0}</span>
+>>>>>>> upstream/main
                   </button>
                   <BookmarkButton storyId={story._id as string} bookmarks={story.bookmarks} className="ml-auto" />
                 </div>

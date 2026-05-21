@@ -120,17 +120,51 @@ const handleExportPDF = () => {
     }
   };
 
+  if (!stories || stories.length === 0) {
+    return (
+      <div className="mt-16 px-4 sm:px-6 lg:px-8 pb-16 flex justify-center">
+        <div className="rounded-2xl border border-slate-700 bg-slate-800/40 p-8 sm:p-12 text-center text-slate-400 max-w-2xl w-full shadow-lg transition-all duration-500 ease-in-out mx-auto">
+          <div className="text-5xl mb-6 animate-pulse">✨</div>
+          <h3 className="text-2xl font-bold text-slate-200 tracking-wide">
+            Your AI-generated story will appear here
+          </h3>
+          <p className="mt-3 text-base text-slate-400">
+            Enter a creative prompt above and let StorySparkAI craft something magical.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
+<<<<<<< HEAD
+    <div className="mt-16 px-4 sm:px-6 lg:px-8 max-w-8xl mx-auto pb-10">
+      <style>
+        {`
+          @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .animate-fade-in-up {
+            animation: fadeInUp 0.6s ease-out forwards;
+          }
+        `}
+      </style>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in-up">
+        <div className="col-span-1 lg:col-span-8 flex flex-col">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+=======
     <div className="mt-16 px-4 sm:px-6 md:px-10 pb-10">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="col-span-1 lg:col-span-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+>>>>>>> upstream/main
             <div className="">
               <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-blue-400">
                 {selectedStory?.title}
               </h1>
             </div>
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-start sm:justify-end">
               <div className="flex -space-x-5">
                 {stories && stories.length > 0 ? (
                   stories.map((story) => (
@@ -159,11 +193,32 @@ const handleExportPDF = () => {
             </div>
           </div>
 
-          <div className="bg-blue-500/10 border border-gray-500 p-6 rounded-lg shadow-lg">
+          <div className="bg-slate-800/80 backdrop-blur-xl border border-slate-700/50 p-8 rounded-2xl shadow-2xl relative overflow-hidden">
+            {/* Ambient AI Glow inside the story card */}
+            <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-[-50px] left-[-50px] w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-300">
+              <h3 className="text-xl font-bold text-slate-200 relative z-10">
                 Generated Story
               </h3>
+<<<<<<< HEAD
+              <span className="text-sm text-gray-800 relative z-10">
+                <button
+                  className={`rounded-lg px-5 py-2 font-semibold flex items-center space-x-2 cursor-pointer bg-blue-600 text-white transition-all duration-200 ${
+                    loading
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/25 active:scale-95"
+                  }`}
+                  onClick={handelPublishStory}
+                  disabled={loading}
+                >
+                  {loading ? "Publishing..." : "Publish"}
+                </button>
+              </span>
+            </div>
+            <div className="prose prose-invert max-w-none text-slate-300 leading-relaxed tracking-wide relative z-10">
+=======
               <div className="flex items-center gap-2">
   {selectedStory && (
     <>
@@ -203,6 +258,7 @@ const handleExportPDF = () => {
   id="story-content"
   className="prose max-w-none text-gray-400"
 >
+>>>>>>> upstream/main
               {selectedStory ? (
                 <p className="break-words">{selectedStory.content}</p>
               ) : (
@@ -211,8 +267,8 @@ const handleExportPDF = () => {
             </div>
           </div>
           <div className="mt-7">
-            <div className="bg-blue-500/10 border border-gray-400 rounded-lg shadow-sm p-6 mb-8">
-              <h3 className="text-lg font-semibold text-gray-300 mb-4">
+            <div className="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-xl p-6 mb-8">
+              <h3 className="text-lg font-bold text-slate-200 mb-4">
                 Select Topics
               </h3>
               <div className="flex flex-wrap gap-2">
@@ -221,7 +277,7 @@ const handleExportPDF = () => {
                     {topics.map((topic, index) => (
                       <span
                         key={index}
-                        className={`px-3 py-1 ${topic.color} rounded-full text-sm hover:bg-blue-200 cursor-pointer`}
+                        className={`px-4 py-1.5 ${topic.color} rounded-full text-sm font-medium transition-transform hover:scale-105 cursor-pointer shadow-sm`}
                         onClick={() => handleTopicClick(index)}
                       >
                         {topic.selected ? (
@@ -245,18 +301,22 @@ const handleExportPDF = () => {
 
         <div className="col-span-1 lg:col-span-4">
           <div className="mb-5">
-            <h1 className="text-2xl bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-blue-400">
+            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-blue-400">
               Preview
             </h1>
           </div>
-          <div className="bg-blue-500/10 border border-gray-400 rounded-lg shadow-lg">
+          <div className="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden group">
             {selectedStory ? (
               <div className="relative flex flex-col rounded-lg">
-                <div className="relative m-2.5 overflow-hidden text-white rounded-md">
+                <div className="relative m-3 overflow-hidden text-white rounded-xl">
                   <img
                     src={selectedStory.imageURL}
                     alt="card-image"
+<<<<<<< HEAD
+                    className="w-full h-48 object-cover transition-transform duration-500 group-hover:scale-105"
+=======
                     className="w-full h-32 sm:h-40 object-cover rounded-b-md"
+>>>>>>> upstream/main
                   />
                 </div>
                 <div className="px-3 py-1">
