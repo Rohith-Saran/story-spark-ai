@@ -38,7 +38,7 @@ jobs:
               `### Before you start working`,
               ``,
               `- 📖 Read the [CONTRIBUTING.md](https://github.com/${owner}/${repo}/blob/main/CONTRIBUTING.md) guide`,
-              `- 💬 Wait for a maintainer to **assign** you the issue before starting work (or comment \`/assign\` to request assignment)`,
+              `- 💬 To get assigned: check **"I want to work on this issue"** when creating the issue (auto-assign), or comment \`/assign\` / *"assign me under GSSoC'26"* on an existing issue`,
               `- 🔍 Search for [existing issues](https://github.com/${owner}/${repo}/issues) to avoid duplicates`,
               ``,
               `### For GSSoC'26 contributors`,

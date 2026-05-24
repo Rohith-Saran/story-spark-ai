@@ -1,6 +1,8 @@
 name: Issue Assignment Bot
 
 on:
+  issues:
+    types: [opened]
   issue_comment:
     types: [created]
   schedule:
@@ -11,6 +13,88 @@ permissions:
   contents: read
 
 jobs:
+  handle-issue-opened:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: issue-assignment-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Auto-assign when "I want to work on this issue" is checked
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            if (issue.pull_request || issue.user.type === 'Bot') return;
+
+            const body = issue.body || '';
+            const wantsToWork = /- \[x\]\s*I want to work on this issue/i.test(body);
+            if (!wantsToWork) {
+              core.info('Issue opened without "I want to work on this issue" checked. Skipping auto-assign.');
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueNumber = issue.number;
+            const requester = issue.user.login;
+
+            const { data: freshIssue } = await github.rest.issues.get({
+              owner, repo, issue_number: issueNumber
+            });
+            const currentAssignees = (freshIssue.assignees || []).map(a => a.login);
+
+            const postComment = text =>
+              github.rest.issues.createComment({ owner, repo, issue_number: issueNumber, body: text });
+
+            if (currentAssignees.length > 0) {
+              await postComment(
+                `Hey @${requester}, thanks for offering to work on this! This issue is already assigned to @${currentAssignees[0]}. Please pick another [unassigned issue](https://github.com/${owner}/${repo}/issues?q=is%3Aissue+is%3Aopen+no%3Aassignee).`
+              );
+              return;
+            }
+
+            let assignedCount = 0;
+            let page = 1;
+            while (true) {
+              const { data } = await github.rest.issues.listForRepo({
+                owner, repo, state: 'open', assignee: requester, per_page: 100, page
+              });
+              assignedCount += data.filter(i => !i.pull_request).length;
+              if (data.length < 100) break;
+              page++;
+            }
+
+            if (assignedCount >= 2) {
+              await postComment(
+                `Hey @${requester}, you checked **I want to work on this issue**, but you already have 2 open issues assigned. Please complete or unassign one, then comment \`/assign\` here to claim this issue. 🙏`
+              );
+              return;
+            }
+
+            await github.rest.issues.addAssignees({
+              owner, repo, issue_number: issueNumber, assignees: [requester]
+            });
+
+            const isGssoc = body.toLowerCase().includes('gssoc');
+            if (isGssoc) {
+              try {
+                await github.rest.issues.addLabels({
+                  owner, repo, issue_number: issueNumber, labels: ["gssoc'26"]
+                });
+              } catch (e) {
+                core.warning(`Failed adding gssoc label: ${e?.message}`);
+              }
+            }
+
+            await postComment(
+              `Hey @${requester}, this issue has been assigned to you because you selected **I want to work on this issue** when creating it! 🎉 Please make progress within 5 days or it will be automatically unassigned due to inactivity.${isGssoc ? "\n\n> 🟠 GSSoC'26 contributor — thanks for contributing under GirlScript Summer of Code 2026!" : ''}`
+            );
+
   handle-assignment:
     if: github.event_name == 'issue_comment' && github.event.issue.pull_request == null
     runs-on: ubuntu-latest
@@ -45,18 +129,27 @@ jobs:
               !maintainerUnassignMatch &&
               /^\/unassign\s*$/i.test(commentBody);
 
-            // /assign or natural-language assignment triggers
+            // /assign, template checkbox phrasing, GSSoC assignment requests
             const assignmentTriggers = [
               '/assign',
               'assign me',
               'i want to work on this',
               'can i work on this',
-              'can i be assigned'
+              'can i be assigned',
+              'contributing under gssoc',
+              'contribute under gssoc',
+              'assign under gssoc',
+              'under gssoc',
+              'gssoc26',
+              "gssoc'26"
             ];
+            const gssocAssignPattern =
+              /(?:assign|work\s+on|pick\s+up|take).{0,40}gssoc|gssoc.{0,40}(?:assign|work\s+on)/i;
             const isAssignRequest =
               !maintainerUnassignMatch &&
               !selfUnassign &&
-              assignmentTriggers.some(t => commentLower.includes(t));
+              (assignmentTriggers.some(t => commentLower.includes(t)) ||
+                gssocAssignPattern.test(commentBody));
 
             if (!maintainerUnassignMatch && !selfUnassign && !isAssignRequest) {
               core.info('Comment does not match any handled command. Skipping.');
@@ -70,10 +163,24 @@ jobs:
               issue_number: issueNumber
             });
             const currentAssignees = (issue.assignees || []).map(a => a.login);
+            const issueBody = issue.body || '';
 
             // ── Helper ───────────────────────────────────────────────────────
             const postComment = body =>
               github.rest.issues.createComment({ owner, repo, issue_number: issueNumber, body });
+
+            const addGssocLabelIfNeeded = async () => {
+              const mentionsGssoc =
+                commentLower.includes('gssoc') || issueBody.toLowerCase().includes('gssoc');
+              if (!mentionsGssoc) return;
+              try {
+                await github.rest.issues.addLabels({
+                  owner, repo, issue_number: issueNumber, labels: ["gssoc'26"]
+                });
+              } catch (e) {
+                core.warning(`Failed adding gssoc label: ${e?.message}`);
+              }
+            };
 
             // ════════════════════════════════════════════════════════════════
             // CASE 1 — Maintainer: /unassign @username
@@ -155,19 +262,16 @@ jobs:
               return;
             }
 
-            // Remove any stale assignees first, then set exactly this one person
-            if (currentAssignees.length > 0) {
-              await github.rest.issues.removeAssignees({
-                owner, repo, issue_number: issueNumber,
-                assignees: currentAssignees
-              });
-            }
             await github.rest.issues.addAssignees({
               owner, repo, issue_number: issueNumber,
               assignees: [commenter]
             });
+            await addGssocLabelIfNeeded();
+
+            const isGssoc =
+              commentLower.includes('gssoc') || issueBody.toLowerCase().includes('gssoc');
             await postComment(
-              `Hey @${commenter}, this issue has been assigned to you! 🎉 Please make progress within 5 days or it will be automatically unassigned due to inactivity.`
+              `Hey @${commenter}, this issue has been assigned to you! 🎉 Please make progress within 5 days or it will be automatically unassigned due to inactivity.${isGssoc ? "\n\n> 🟠 GSSoC'26 contributor — thanks for contributing under GirlScript Summer of Code 2026!" : ''}`
             );
 
   inactivity-check:
