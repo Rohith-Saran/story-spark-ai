@@ -51,6 +51,7 @@ if (!email || !emailRegex.test(email)) {
     { label: "Help Center", to: "/help"       },
     { label: "Community",   to: "/community"  },
     { label: "Guidelines",  to: "/guidelines" },
+    { label: "Contributors", to: "/contributors" },
   ];
 
   const legalLinks = [
