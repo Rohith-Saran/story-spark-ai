@@ -521,7 +521,11 @@ useEffect(() => {
                     {topics.map((topic, index) => (
                       <span
                         key={index}
-                        className={`inline-flex items-center gap-2 px-4 py-1.5 ${topic.color} rounded-full text-sm font-medium transition-transform hover:scale-105 shadow-sm`}
+                        className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-transform hover:scale-105 shadow-sm ${
+  topic.selected
+    ? "bg-purple-600 text-white"
+    : "bg-transparent border border-slate-500 text-slate-300"
+}`}
                       >
                         <button
                           type="button"
