@@ -249,6 +249,7 @@ const RelatedStoriesComponent: React.FC<IRelatedStoriesComponentProps> = ({
   const [showWorldMap, setShowWorldMap] = useState<boolean>(false);
   const [showRemix, setShowRemix] = useState<boolean>(false);
   const [showTranslator, setShowTranslator] = useState<boolean>(false);
+  const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
   const [createPost] = useCreatePostMutation();
   const [deletePost] = useDeletePostMutation();
   const { data: profile } = useGetProfileInfoQuery(undefined, { skip: !isLogin });
@@ -499,7 +500,7 @@ const RelatedStoriesComponent: React.FC<IRelatedStoriesComponentProps> = ({
 
       const safeTitle = title.replace(/[^a-z0-9]/gi, "_").toLowerCase();
       doc.save(`${safeTitle}.pdf`);
-      toast.withTimeout(toastId);
+      toast.dismiss(toastId);
       toast.success("Premium PDF downloaded!");
     } catch (error) {
       console.error(error); toast.dismiss(toastId); toast.error("Failed to export PDF.");
@@ -524,6 +525,70 @@ const RelatedStoriesComponent: React.FC<IRelatedStoriesComponentProps> = ({
       document.body.removeChild(link); URL.revokeObjectURL(url);
       toast.success("Markdown downloaded!");
     } catch (error) { console.error(error); toast.error("Failed to export Markdown."); }
+  };
+
+  const handleExportTXT = () => {
+    if (!selectedStory) { toast.error("No story available to export."); return; }
+    try {
+      const title = selectedStory.title || "Story";
+      const content = selectedStory.content || "";
+      const authorName = isLogin && profile?.name ? profile.name : "Anonymous";
+      const isoDate = new Date().toISOString().split("T")[0];
+      const txtContent = `Title: ${title}\nAuthor: ${authorName}\nDate: ${isoDate}\n\n${content}\n`;
+      const blob = new Blob([txtContent], { type: "text/plain;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "story"}.txt`);
+      document.body.appendChild(link); link.click();
+      document.body.removeChild(link); URL.revokeObjectURL(url);
+      toast.success("TXT downloaded!");
+    } catch (error) { console.error(error); toast.error("Failed to export TXT."); }
+  };
+
+  const handleExportDOCX = async () => {
+    if (!selectedStory) { toast.error("No story available to export."); return; }
+    const toastId = toast.loading("Preparing your DOCX file...");
+    try {
+      const { Document, Packer, Paragraph, TextRun } = await import("docx");
+      const title = selectedStory.title || "Story";
+      const content = selectedStory.content || "";
+      const authorName = isLogin && profile?.name ? profile.name : "Anonymous";
+      const isoDate = new Date().toISOString().split("T")[0];
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({ children: [new TextRun({ text: title, bold: true, size: 32 })] }),
+            new Paragraph({ children: [new TextRun({ text: `Author: ${authorName}`, size: 24 })] }),
+            new Paragraph({ children: [new TextRun({ text: `Date: ${isoDate}`, size: 24 })] }),
+            new Paragraph({ text: "" }),
+            ...content.split(/\n+/).filter(para => para.trim() !== "").map(para => new Paragraph({
+              children: [new TextRun({ text: para.trim(), size: 24 })],
+              spacing: { after: 200 }
+            }))
+          ],
+        }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "story"}.docx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.dismiss(toastId);
+      toast.success("DOCX downloaded!");
+    } catch (error) {
+      console.error(error);
+      toast.dismiss(toastId);
+      toast.error("Failed to export DOCX.");
+    }
   };
 
   const handelPublishStory = async () => {
@@ -565,8 +630,6 @@ const RelatedStoriesComponent: React.FC<IRelatedStoriesComponentProps> = ({
   if (!selectedStory) {
     return null;
   }
-  const navigate = useNavigate();
-  const filteredPosts = posts.filter((post) => post._id !== currentPostId);
 
   return (
     <div className="mt-16 px-4 sm:px-6 lg:px-8 max-w-8xl mx-auto pb-10">
@@ -628,37 +691,35 @@ const RelatedStoriesComponent: React.FC<IRelatedStoriesComponentProps> = ({
             <div className="absolute bottom-[-50px] left-[-50px] w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
             
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-              <h3 className="text-xl font-bold text-slate-200 relative z-10">
-                Generated Story
-              </h3>
-              <div className="flex flex-wrap items-center gap-2 relative z-10">
-                <button
-                  type="button"
-                  className="rounded-lg px-4 py-2 bg-slate-700 text-slate-200 font-semibold cursor-pointer hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={handleCopyStory}
-                  disabled={!selectedStory}
-                >
+              <h3 className="text-xl font-bold text-slate-200 relative z-10">Generated Story</h3>
+              <div className="flex flex-wrap items-center gap-2 relative z-50">
+                <button type="button" className="rounded-lg px-4 py-2 bg-slate-700 text-slate-200 font-semibold cursor-pointer hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleCopyStory} disabled={!selectedStory}>
                   {isCopied ? "✓ Copied" : "📋 Copy"}
                 </button>
-                <button
-                  type="button"
-                  className="rounded-lg px-4 py-2 bg-purple-700 text-slate-200 font-semibold cursor-pointer hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={handleExportPDF}
-                  disabled={!selectedStory}
-                >
-                  📄 Export PDF
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg px-4 py-2 bg-indigo-700 text-slate-200 font-semibold cursor-pointer hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={handleExportMarkdown}
-                  disabled={!selectedStory}
-                >
-            ⬇️ Export Markdown
-                </button>
-                <button type="button" className="rounded-lg px-4 py-2 bg-pink-600 text-slate-200 font-semibold cursor-pointer hover:bg-pink-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => handleShareStory("twitter")} disabled={!selectedStory}>
-                  🐦 Share
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="rounded-lg px-4 py-2 bg-indigo-700 text-slate-200 font-semibold cursor-pointer hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    onClick={() => setShowExportMenu(!showExportMenu)}
+                    disabled={!selectedStory}
+                  >
+                    ⬇️ Export <i className="fa-solid fa-chevron-down text-xs ml-1"></i>
+                  </button>
+                  <div className={`absolute top-full mt-2 left-0 w-48 bg-slate-800/95 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col transition-all duration-300 origin-top-left ${showExportMenu ? "opacity-100 scale-100 translate-y-0 pointer-events-auto" : "opacity-0 scale-95 -translate-y-2 pointer-events-none"}`}>
+                    <button type="button" className="w-full text-left px-4 py-3 text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-slate-700/50" onClick={() => { handleExportPDF(); setShowExportMenu(false); }}>
+                      📄 PDF
+                    </button>
+                    <button type="button" className="w-full text-left px-4 py-3 text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-slate-700/50" onClick={() => { handleExportDOCX(); setShowExportMenu(false); }}>
+                      📘 Word (DOCX)
+                    </button>
+                    <button type="button" className="w-full text-left px-4 py-3 text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-slate-700/50" onClick={() => { handleExportMarkdown(); setShowExportMenu(false); }}>
+                      Ⓜ️ Markdown
+                    </button>
+                    <button type="button" className="w-full text-left px-4 py-3 text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-3" onClick={() => { handleExportTXT(); setShowExportMenu(false); }}>
+                      📝 Plain Text
+                    </button>
+                  </div>
+                </div>
                 <button type="button" className="rounded-lg px-4 py-2 bg-violet-700 text-slate-200 font-semibold cursor-pointer hover:bg-violet-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setShowWorldMap(true)} disabled={!selectedStory}>
                   🗺️ World Map
                 </button>
