@@ -44,7 +44,8 @@ const LANGUAGES = [
   { code: "bn", name: "Bengali" },
   { code: "ta", name: "Tamil" },
   { code: "te", name: "Telugu" },
-  { code: "mr", name: "Marathi" }
+  { code: "mr", name: "Marathi" },
+  { code: "kn", name: "Kannada" },
 ];
 
 const GENRES = [
@@ -109,6 +110,17 @@ const GENRE_LABELS: Record<string, Record<GenreName, string>> = {
     Drama: "नाटक", Comedy: "विनोद", Horror: "भयकथा", Romance: "प्रेमकथा",
     "Sci-Fi": "विज्ञानकथा", Fantasy: "कल्पनारम्य", Mystery: "रहस्य", Adventure: "साहस",
   },
+  Kannada: {
+  Drama: "ನಾಟಕ",
+  Comedy: "ಹಾಸ್ಯ",
+  Horror: "ಭಯಾನಕ",
+  Romance: "ಪ್ರೇಮಕಥೆ",
+  "Sci-Fi": "ವೈಜ್ಞಾನಿಕ ಕಾಲ್ಪನಿಕ",
+  Fantasy: "ಕಲ್ಪನಾ ಕಥೆ",
+  Mystery: "ರಹಸ್ಯ",
+  Adventure: "ಸಾಹಸ",
+},
+
 };
 
 type UiText = {
@@ -305,6 +317,50 @@ const UI_TEXT: Record<string, UiText> = {
     generateStory: "कथा तयार करा", publishStory: "कथा प्रकाशित करा", close: "बंद करा", freeLimitReached: "मोफत मर्यादा पूर्ण",
     freeLimitMessage: "तुम्ही सर्व 3 मोफत कथा निर्मिती वापरल्या आहेत. पुढे सुरू ठेवण्यासाठी लॉग इन करा.", continueBrowsing: "ब्राउझिंग सुरू ठेवा", recentPrompts: "अलीकडील प्रॉम्प्ट", usePrompt: "वापरा", delete: "हटवा", clearAll: "सर्व मुडून टाका", noRecentPrompts: "अलीकडील प्रॉम्प्ट नाहीत",
   },
+  Kannada: {
+  back: "ಹಿಂದೆ",
+  freeAccess: "3 ವಿನಂತಿಗಳಿಗೆ ಉಚಿತ ಪ್ರವೇಶ",
+  login: "ಲಾಗಿನ್",
+  forMore: "ಇನ್ನಷ್ಟುಗಾಗಿ!",
+  perMonth: "ತಿಂಗಳಿಗೆ",
+  upgrade: "ಅಪ್‌ಗ್ರೇಡ್",
+  monthlyRequests: "ಈ ತಿಂಗಳ ವಿನಂತಿಗಳು",
+  totalPosts: "ಒಟ್ಟು ಪೋಸ್ಟ್‌ಗಳು",
+  titleStart: "ನಿಮ್ಮ ಕಲ್ಪನೆಗಳನ್ನು",
+  titleAccent: "ಅದ್ಭುತ ಕಥೆಗಳಾಗಿ ಪರಿವರ್ತಿಸಿ!",
+  length: "ಉದ್ದ",
+  language: "ಭಾಷೆ",
+  short: "ಚಿಕ್ಕದು",
+  medium: "ಮಧ್ಯಮ",
+  long: "ಉದ್ದ",
+  promptPlaceholder: "ಪ್ರತಿ ಮಹಾನ್ ಕಥೆಯೂ ಒಂದು ಕಲ್ಪನೆಯಿಂದ ಆರಂಭವಾಗುತ್ತದೆ. ನಿಮ್ಮದು ಏನು?",
+  keyboardTip: "ಕೀಬೋರ್ಡ್ ಸಲಹೆ:",
+  press: "ಒತ್ತಿರಿ",
+  toGenerate: "ರಚಿಸಲು",
+  alsoWorks: "ಇದೂ ಕೆಲಸ ಮಾಡುತ್ತದೆ",
+  forNewLine: "ಹೊಸ ಸಾಲಿಗಾಗಿ",
+  generating: "ರಚಿಸಲಾಗುತ್ತಿದೆ...",
+  generate: "ರಚಿಸಿ",
+  examples: "ನೀವು ಉಲ್ಲೇಖಿಸಬಹುದಾದ ಕೆಲವು ಉದಾಹರಣೆಗಳು:-",
+  selectPrompt: "ಒಂದು ಪ್ರಾಂಪ್ಟ್ ಆಯ್ಕೆಮಾಡಿ",
+  characterLimit: "ಅಕ್ಷರ ಮಿತಿ ತಲುಪಿದೆ - ರಚನೆ ನಿಷ್ಕ್ರಿಯವಾಗಿದೆ",
+  charactersRemaining: "ಅಕ್ಷರಗಳು ಉಳಿದಿವೆ",
+  shortcuts: "ಕೀಬೋರ್ಡ್ ಶಾರ್ಟ್‌ಕಟ್‌ಗಳು",
+  openHelp: "ಸಹಾಯ ತೆರೆಯಿರಿ",
+  closeHelp: "ಸಹಾಯ ಮುಚ್ಚಿರಿ",
+  focusPrompt: "ಪ್ರಾಂಪ್ಟ್ ಮೇಲೆ ಗಮನ",
+  generateStory: "ಕಥೆ ರಚಿಸಿ",
+  publishStory: "ಕಥೆ ಪ್ರಕಟಿಸಿ",
+  close: "ಮುಚ್ಚಿ",
+  freeLimitReached: "ಉಚಿತ ಮಿತಿ ತಲುಪಿದೆ",
+  freeLimitMessage: "ನೀವು ಎಲ್ಲಾ 3 ಉಚಿತ ಕಥೆ ರಚನೆಗಳನ್ನು ಬಳಸಿದ್ದೀರಿ. ಇನ್ನಷ್ಟು ಕಥೆಗಳನ್ನು ರಚಿಸಲು ಲಾಗಿನ್ ಮಾಡಿ.",
+  continueBrowsing: "ಬ್ರೌಸ್ ಮುಂದುವರಿಸಿ",
+  recentPrompts: "ಇತ್ತೀಚಿನ ಪ್ರಾಂಪ್ಟ್‌ಗಳು",
+  usePrompt: "ಬಳಸಿ",
+  delete: "ಅಳಿಸಿ",
+  clearAll: "ಎಲ್ಲವನ್ನು ತೆರವುಗೊಳಿಸಿ",
+  noRecentPrompts: "ಇನ್ನೂ ಇತ್ತೀಚಿನ ಪ್ರಾಂಪ್ಟ್‌ಗಳಿಲ್ಲ",
+},
 };
 
 const LANGUAGE_STORAGE_KEY = "storySparkLanguage";

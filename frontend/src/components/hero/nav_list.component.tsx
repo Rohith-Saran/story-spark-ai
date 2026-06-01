@@ -1,4 +1,60 @@
-return (
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useRef, useState } from "react";
+
+
+const ThemeToggle = () => null;
+
+type NotificationComponentProps = {
+  notifications: any[];
+  showNotification: boolean;
+  setShowNotification: () => void;
+  unreadCount: number;
+  onMarkAsRead: () => void;
+};
+
+const NotificationComponent = ({
+  notifications,
+  showNotification,
+  setShowNotification,
+  unreadCount,
+  onMarkAsRead,
+}: NotificationComponentProps) => null;
+
+export default function NavList() {
+  function getLinkClass(isActive: boolean): string {
+    return `inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all duration-300 ${
+      isActive
+        ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white"
+        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900/50 dark:hover:text-white"
+    }`;
+  }
+
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
+  const [notifications] = useState<any[]>([]);
+  const unreadCount = notifications.filter((notification) => !notification?.read).length;
+  const isLogin = false;
+  const isAdmin = false;
+  const toggle = () => setIsOpen((prev) => !prev);
+  const close = () => setIsOpen(false);
+  const markAsRead = () => {};
+  const handelLogout = () => {};
+  const getMobileLinkClass = (isActive: boolean) => getLinkClass(isActive);
+  const renderMobileNavContent = (label: string, isActive: boolean) => (
+    <span
+      className={`inline-flex w-full items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition-all duration-300 ${
+        isActive
+          ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white"
+          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900/50 dark:hover:text-white"
+      }`}
+    >
+      {label}
+    </span>
+  );
+
+  return (
   <header className="sticky top-0 z-50 w-full bg-white/90 supports-[backdrop-filter]:bg-white/75 dark:bg-[#0B1120]/80 dark:supports-[backdrop-filter]:bg-[#0B1120]/70 backdrop-blur-md border-b border-slate-200/70 dark:border-white/10 transition-colors duration-300 transform-gpu">
     <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
       <div className="flex items-center justify-between w-full gap-2">
@@ -6,7 +62,7 @@ return (
         {/* Logo */}
         <div className="flex items-center shrink-0">
           <Link to="/">
-            <img src={logo} alt="logo" className="h-9 w-auto object-contain" />
+            
           </Link>
         </div>
 
@@ -236,4 +292,5 @@ return (
       )}
     </div>
   </header>
-);
+  );
+}
