@@ -14,7 +14,12 @@ const aiModel = z.object({
     prompt: z
       .string({ required_error: "Prompt is required!" })
       .trim()
-      .min(1, "Prompt cannot be empty or whitespace only!"),
+      .min(1, "Prompt cannot be empty or whitespace only!")
+      .refine((val) => {
+        // Remove [Genre: ...] if it exists to check the actual prompt content
+        const stripped = val.replace(/^\[Genre:.*?\]\s*/, '').trim();
+        return stripped.length > 0;
+      }, { message: "Prompt must contain actual story content, not just a genre." }),
     language: z.string().optional(),
     tone: z
       .enum(VALID_TONES, {
