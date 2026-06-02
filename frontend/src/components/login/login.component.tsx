@@ -167,7 +167,8 @@ const LoginComponent = () => {
               register={register}
               validation={{ required: "Email is required" }}
               error={errors.email}
-            />
+              autoComplete="email"
+              />
 
             {/* Password field — eye icon toggle is provided by SSInput when type="password" */}
             <SSInput
@@ -180,6 +181,7 @@ const LoginComponent = () => {
               register={register}
               validation={{ required: "Password is required" }}
               error={errors.password}
+              autoComplete="password"
             />
 
             <div className="flex justify-end -mt-2">
