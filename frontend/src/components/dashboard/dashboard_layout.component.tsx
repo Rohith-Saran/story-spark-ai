@@ -1,4 +1,4 @@
-// //
+﻿// //
 // import React, { useState } from "react";
 // import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 // import { MenuItem, menuItems } from "./dashboard.utils";
@@ -185,14 +185,15 @@ const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
 
   const user = getUserInfo();
+
   const { data: userProfile } = useGetProfileInfoQuery(undefined, {
     skip: !user,
   });
 
+
   if (!user) {
-  return <Navigate to="/login" replace />;
-}
-const { data } = useGetProfileInfoQuery();
+    return <Navigate to="/login" replace />;
+  }
   const currentPage = menuItems
     .flatMap((item) => (item.subRoutes ? [item, ...item.subRoutes] : [item]))
     .find(

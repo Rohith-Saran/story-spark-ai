@@ -112,21 +112,12 @@ const LoginComponent = () => {
   return (
     <div className="min-h-screen bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex items-center justify-center relative overflow-hidden px-4">
 
-      {/* Back to Home Button */}
-      <button
-        onClick={() => window.location.href = "/"}
-        className="absolute top-4 left-4 sm:top-6 sm:left-6 inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700/50 rounded-full shadow-lg backdrop-blur-md hover:shadow-xl transition-all duration-200 group z-20 cursor-pointer"
-      >
-        <span className="transform group-hover:-translate-x-1 transition-transform duration-200">←</span>
-        Back to Home
-      </button>
-
       {/* Background Glow */}
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600/20 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="flex w-full max-w-md flex-col justify-center py-12 relative z-10">
+      <div className="flex w-full max-w-md flex-col justify-center py-12 relative z-10 px-4">
 
         <div className="sm:mx-auto sm:w-full sm:max-w-md mb-8">
           <h2 className="text-center text-4xl sm:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400 drop-shadow-sm">
@@ -134,19 +125,21 @@ const LoginComponent = () => {
           </h2>
         </div>
 
-        <div className="bg-slate-50 dark:bg-slate-800/60 backdrop-blur-xl border border-slate-200 dark:border-slate-700/50 rounded-2xl p-8 sm:p-10 shadow-2xl">
+        <div className="bg-slate-50 dark:bg-slate-800/60 backdrop-blur-xl border border-slate-200 dark:border-slate-700/50 rounded-2xl p-6 sm:p-8 shadow-2xl w-full min-w-0 overflow-hidden">
+
             <button
             onClick={() => window.location.href = "/"}
-            className="mb-4 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline hover:underline transition-colors duration-200 flex items-center gap-2 cursor-pointer"
+            className="mb-4 text-sm text-blue-400 hover:text-blue-300 transition-colors duration-200 flex items-center gap-2"
                       >
             ← Back to Home
             </button>
+
           <h3 className="mb-6 text-center text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-200">
             Welcome Back
           </h3>
 
           <form
-            className="space-y-5"
+            className="space-y-5 w-full min-w-0 overflow-hidden"
             onSubmit={handleSubmit(onSubmit)}
           >
 

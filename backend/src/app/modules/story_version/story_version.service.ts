@@ -2,12 +2,15 @@ import { enhancePromptWithGemini } from "./enhance_prompt.utils";
 import { raceGenerationWithTimeout, GenerationTimeoutError } from "../../../utils/generation_timeout";
 import ApiError from "../../../errors/api_error";
 import httpStatus from "http-status";
-import httpStatus from "http-status";
-import ApiError from "../../../errors/api_error";
 import { Post } from "../post/post.model";
 import { StoryVersion } from "./story_version.model";
 import { IStoryVersion } from "./story_version.interface";
 import { IPost } from "../post/post.interface";
+import paginationHelper from "../../../utils/pagination_helper";
+import {
+  IPaginationOptions,
+  IGenericResponse,
+} from "../../../interfaces/pagination";
 
 const createVersionSnapshot = async (
   storyId: string,
@@ -60,8 +63,10 @@ const createVersionSnapshot = async (
 
 const getVersionsByStoryId = async (
   storyId: string,
-  userId: string
-): Promise<IStoryVersion[]> => {
+  userId: string,
+  pagination: IPaginationOptions
+): Promise<IGenericResponse<IStoryVersion[]>> => {
+  const { page, limit, skip } = paginationHelper(pagination);
   const post = await Post.findById(storyId);
   if (!post) {
     throw new ApiError(httpStatus.NOT_FOUND, "Story not found!");
@@ -72,7 +77,21 @@ const getVersionsByStoryId = async (
     throw new ApiError(httpStatus.FORBIDDEN, "You do not have access to this story history!");
   }
 
-  return await StoryVersion.find({ storyId }).sort({ versionNumber: -1 });
+const data = await StoryVersion.find({ storyId })
+  .sort({ versionNumber: -1 })
+  .skip(skip)
+  .limit(limit);
+
+const total = await StoryVersion.countDocuments({ storyId });
+
+return {
+  meta: {
+    page,
+    limit,
+    total,
+  },
+  data,
+};
 };
 
 const getVersionById = async (
@@ -136,7 +155,7 @@ const restoreVersion = async (
   return post;
 };
 
-export const StoryVersionService = {const ENHANCE_TIMEOUT_MS = 60000;
+const ENHANCE_TIMEOUT_MS = 60000;
 
 const enhancePrompt = async (prompt: string): Promise<string> => {
   try {
@@ -170,6 +189,8 @@ const enhancePrompt = async (prompt: string): Promise<string> => {
     );
   }
 };
+
+export const StoryVersionService = {
   createVersionSnapshot,
   getVersionsByStoryId,
   getVersionById,
