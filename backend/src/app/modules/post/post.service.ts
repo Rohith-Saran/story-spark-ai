@@ -158,14 +158,6 @@ const getPosts = async (
         })),
       });
     }
-    andCondition.push({
-      $or: postSearchFields.map((field) => ({
-        [field]: {
-          $regex: searchTerm,
-          $options: "i",
-        },
-      })),
-    });
   }
 
   if (trendingTopic) {
