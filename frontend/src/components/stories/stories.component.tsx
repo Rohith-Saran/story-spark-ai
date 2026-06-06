@@ -15,6 +15,7 @@ import { getErrorMessage } from "../../error/error.message";
 import useKeyboardShortcuts from "../../hooks/useKeyboardShortcuts";
 import { useRecentPrompts } from "../../hooks/useRecentPrompts";
 import StoryGeneratingAnimation from "../loading/story-generating-animation.component";
+import { useDebounce } from "../../hooks/useDebounce";
 
 const soundtrackMap: Record<string, string> = {
   "🧙 Fantasy": "/audio/fantasy.mp3",
@@ -96,7 +97,7 @@ const GENRE_LABELS: Record<string, Record<GenreName, string>> = {
     "Sci-Fi": "SF", Fantasy: "판타지", Mystery: "미스터리", Adventure: "모험",
   },
   Bengali: {
-    Drama: "নাটক", Comedy: "কৌতুক", Horror: "ভৌতিক", Romance: "প্রেম",
+    Drama: "नाटक", Comedy: "কৌতুক", Horror: "ভৌতিক", Romance: "প্রেম",
     "Sci-Fi": "বিজ্ঞান কল্পকাহিনি", Fantasy: "কল্পনা", Mystery: "রহস্য", Adventure: "অভিযান",
   },
   Tamil: {
@@ -105,15 +106,11 @@ const GENRE_LABELS: Record<string, Record<GenreName, string>> = {
   },
   Telugu: {
     Drama: "నాటకం", Comedy: "హాస్యం", Horror: "భయానకం", Romance: "ప్రేమ",
-    "Sci-Fi": "విజ్ఞాన కథ", Fantasy: "కాల్పనికం", Mystery: "రహస్యం", Adventure: "సాహసం",
+    "Sci-Fi": "విజ్ఞాన కథ", Fantasy: "கాల్పనికం", Mystery: "రహస్యం", Adventure: "సాహసం",
   },
   Marathi: {
     Drama: "नाटक", Comedy: "विनोद", Horror: "भयकथा", Romance: "प्रेमकथा",
     "Sci-Fi": "विज्ञानकथा", Fantasy: "कल्पनारम्य", Mystery: "रहस्य", Adventure: "साहस",
-  },
-  Kannada: {
-    Drama: "ನಾಟಕ", Comedy: "ಹಾಸ್ಯ", Horror: "ಭಯಾನಕ", Romance: "ಪ್ರೇಮಕಥೆ",
-    "Sci-Fi": "ವೈಜ್ಞಾನಿಕ ಕಾಲ್ಪನಿಕ", Fantasy: "ಕಲ್ಪನಾ ಕಥೆ", Mystery: "ರಹಸ್ಯ", Adventure: "ಸಾಹಸ",
   },
 };
 
@@ -186,8 +183,8 @@ const UI_TEXT: Record<string, UiText> = {
     selectPrompt: "Selecciona una indicacion", characterLimit: "Limite de caracteres alcanzado - la generacion esta deshabilitada",
     charactersRemaining: "caracteres restantes", shortcuts: "Atajos de teclado", openHelp: "Abrir ayuda", closeHelp: "Cerrar ayuda",
     focusPrompt: "Enfocar indicacion", generateStory: "Generar historia", publishStory: "Publicar historia", close: "Cerrar",
-    freeLimitReached: "Limite gratuito alcanzado", freeLimitMessage: "Has usado las 3 generaciones gratuitas. Inicia sesion para continuar creando historias.",
-    continueBrowsing: "Continuar navegando", recentPrompts: "Indicaciones recientes", usePrompt: "Usar", delete: "Eliminar", clearAll: "Limpiar todo", noRecentPrompts: "Sin indicaciones recientes",
+    freeLimitReached: "Limite gratuito alcanzado", freeLimitMessage: "Has usado las 3 generations gratuitas. Inicia sesion para continuar creando historias.",
+    continueBrowsing: "Continuar navegando", recentPrompts: "Indicaciones recentes", usePrompt: "Usar", delete: "Eliminar", clearAll: "Limpiar todo", noRecentPrompts: "Sin indicaciones recientes",
   },
   French: {
     back: "RETOUR", freeAccess: "Acces gratuit pour 3 demandes", login: "Connexion", forMore: "pour en obtenir plus !",
@@ -225,7 +222,7 @@ const UI_TEXT: Record<string, UiText> = {
     selectPrompt: "एक संकेत चुनें", characterLimit: "अक्षर सीमा पूरी - निर्माण अक्षम है", charactersRemaining: "अक्षर शेष",
     shortcuts: "कीबोर्ड शॉर्टकट", openHelp: "सहायता खोलें", closeHelp: "सहायता बंद करें", focusPrompt: "संकेत पर जाएं",
     generateStory: "कहानी बनाएं", publishStory: "कहानी प्रकाशित करें", close: "बंद करें", freeLimitReached: "मुफ्त सीमा पूरी",
-    freeLimitMessage: "आपने सभी 3 मुफ्त कहानी निर्माण उपयोग कर लिए हैं। आगे जारी रखने के लिए लॉग इन करें।", continueBrowsing: "ब्राउज़ करना जारी रखें", recentPrompts: "हाल के संकेत", usePrompt: "उपयोग करें", delete: "हटाएं", clearAll: "सब साफ करें", noRecentPrompts: "कोई हाल के संकेत नहीं",
+    freeLimitMessage: "आपने सभी 3 मुफ्त कहानी निर्माण उपयोग कर लिए हैं। आगे जारी रखने के लिए लॉग इन करें।", continueBrowsing: "ब्राउज़ करना जारी रखें", recentPrompts: "हाल के संकेत", usePrompt: "उपयोग करें", delete: "हटाएं", clearAll: "सब साफ करें", noRecentPrompts: "कोई हाल के संकेत नहीं",
   },
   German: {
     back: "ZURUCK", freeAccess: "Kostenloser Zugang fur 3 Anfragen", login: "Anmelden", forMore: "fur mehr!",
@@ -267,13 +264,13 @@ const UI_TEXT: Record<string, UiText> = {
     back: "ফিরে যান", freeAccess: "৩টি অনুরোধের জন্য বিনামূল্যে ব্যবহার", login: "লগ ইন", forMore: "করে আরও পান!",
     perMonth: "প্রতি মাসে", upgrade: "আপগ্রেড", monthlyRequests: "এই মাসের অনুরোধ", totalPosts: "মোট পোস্ট",
     titleStart: "আপনার ভাবনাকে বদলে দিন", titleAccent: "অসাধারণ গল্পে!", length: "দৈর্ঘ্য", language: "ভাষা",
-    short: "ছোট", medium: "মাঝারি", long: "লম্বা", promptPlaceholder: "প্রতিটি মহান গল্প একটি ভাবনা দিয়ে শুরু হয়। আপনারটি কী?",
+    short: "ছোট", medium: "মাঝারি", long: "লম্বা", promptPlaceholder: "প্রতিটি মহান গল্প একটি ভাবনা দিয়ে শুরু হয়। আপনারটি কী?",
     keyboardTip: "কীবোর্ড টিপ:", press: "চাপুন", toGenerate: "তৈরি করতে", alsoWorks: "এটিও কাজ করে", forNewLine: "নতুন লাইনের জন্য",
     generating: "তৈরি হচ্ছে...", generate: "তৈরি করুন", examples: "কিছু উদাহরণ প্রম্পট:",
     selectPrompt: "একটি প্রম্পট বেছে নিন", characterLimit: "অক্ষরের সীমা পূর্ণ - তৈরি বন্ধ", charactersRemaining: "অক্ষর বাকি",
-    shortcuts: "কীবোর্ড শর্টকাট", openHelp: "সহায়তা খুলুন", closeHelp: "সহায়তা বন্ধ করুন", focusPrompt: "প্রম্পটে যান",
+    shortcuts: "কীবোর্ড শর্টকাট", openHelp: "সহায়তা খুলুন", closeHelp: "সহায়ता বন্ধ করুন", focusPrompt: "প্রম্পটে যান",
     generateStory: "গল্প তৈরি করুন", publishStory: "গল্প প্রকাশ করুন", close: "বন্ধ করুন", freeLimitReached: "বিনামূল্যের সীমা পূর্ণ",
-    freeLimitMessage: "আপনি ৩টি বিনামূল্যের গল্প তৈরি ব্যবহার করেছেন। চালিয়ে যেতে লগ ইন করুন।", continueBrowsing: "ব্রাউজ চালিয়ে যান", recentPrompts: "সম্প্রতি ব্যবহৃত প্রম্পট", usePrompt: "ব্যবহার করুন", delete: "মুছে ফেলুন", clearAll: "সব মুছে দিন", noRecentPrompts: "কোনো সম্প্রতি ব্যবহৃত প্রম্পট নেই",
+    freeLimitMessage: "আপনি ৩টি বিনামূল্যের গল্প তৈরি ব্যবহার করেছেন। চালিয়ে যেতে লগ ইন করুন।", continueBrowsing: "ব্রাউজ চালিয়ে যান", recentPrompts: "সম্প্রতি ব্যবহৃত প্রম্পট", usePrompt: "ব্যবহার করুন", delete: "মুছে ফেলুন", clearAll: "সব মুছে দিন", noRecentPrompts: "কোনো সম্প্রতি ব্যবহৃত প্রম্পট নেই",
   },
   Tamil: {
     back: "திரும்பு", freeAccess: "3 கோரிக்கைகளுக்கு இலவச அணுகல்", login: "உள்நுழை", forMore: "செய்து மேலும் பெறுங்கள்!",
@@ -292,10 +289,10 @@ const UI_TEXT: Record<string, UiText> = {
     perMonth: "నెలకు", upgrade: "అప్‌గ్రేడ్", monthlyRequests: "ఈ నెల అభ్యర్థనలు", totalPosts: "మొత్తం పోస్టులు",
     titleStart: "మీ ఆలోచనలను", titleAccent: "అద్భుత కథలుగా మార్చండి!", length: "పొడవు", language: "భాష",
     short: "చిన్నది", medium: "మధ్యస్థం", long: "పొడవైనది", promptPlaceholder: "ప్రతి గొప్ప కథ ఒక ఆలోచనతో మొదలవుతుంది. మీది ఏమిటి?",
-    keyboardTip: "కీబోర్ด చిట్కా:", press: "నొక్కండి", toGenerate: "రూపొందించడానికి", alsoWorks: "కూడా పనిచేస్తుంది", forNewLine: "కొత్త లైన్ కోసం",
-    generating: "రూపొందిస్తోంది...", generate: "రూపొందించు", examples: "కొన్ని ఉదాహరణ ప్రాంప్ట్‌లు:",
+    keyboardTip: "కీబోర్డ్ చిట్కా:", press: "నొక్కండి", toGenerate: "రూపొందించడానికి", alsoWorks: "కూడా పనిచేస్తుంది", forNewLine: "కొత్త లైన్ కోసం",
+    generating: "రూపొందిస్తోంది...", generate: "రూపొందించు", examples: "కొన్ని ఉదాహरण ప్రాంప్ట్‌లు:",
     selectPrompt: "ప్రాంప్ట్ ఎంచుకోండి", characterLimit: "అక్షర పరిమితి చేరింది - రూపొందింపు నిలిపివేయబడింది", charactersRemaining: "అక్షరాలు మిగిలాయి",
-    shortcuts: "కీబోర్డ్ సత్వరమార్గాలు", openHelp: "సహాయం తెరవండి", closeHelp: "సహాయం మూసివేయండి", focusPrompt: "ప్రాంప్ట్‌పై దృష్టి",
+    shortcuts: "キーボードショートカット", openHelp: "సహాయం తెరవండి", closeHelp: "సహాయం మూసివేయండి", focusPrompt: "ప్రాంप्ట్‌పై దృష్టి",
     generateStory: "కథ రూపొందించు", publishStory: "కథ ప్రచురించు", close: "మూసివేయి", freeLimitReached: "ఉచిత పరిమితి చేరింది",
     freeLimitMessage: "మీరు 3 ఉచిత కథా రూపొందింపులను ఉపయోగించారు. కొనసాగడానికి లాగిన్ చేయండి.", continueBrowsing: "బ్రౌజింగ్ కొనసాగించు", recentPrompts: "ఇటీవల ప్రాంప్ట్‌లు", usePrompt: "ఉపయోగించు", delete: "తొలగించు", clearAll: "అన్నింటిని తొలగించు", noRecentPrompts: "ఇటీవల ప్రాంప్ట్‌లు లేవు",
   },
@@ -356,16 +353,6 @@ const TONES = [
 
 type ToneLabel = (typeof TONES)[number]["label"];
 
-const getUniqueStories = (arr: IStories[]) => {
-  const seen = new Set<string>();
-  return arr.filter((item) => {
-    if (!item.uuid) return false;
-    const duplicate = seen.has(item.uuid);
-    seen.add(item.uuid);
-    return !duplicate;
-  });
-};
-
 interface TonePickerProps {
   selected: ToneLabel | "";
   onChange: (tone: ToneLabel | "") => void;
@@ -374,7 +361,7 @@ interface TonePickerProps {
 const TonePicker: React.FC<TonePickerProps> = ({ selected, onChange }) => {
   return (
     <div className="flex flex-wrap gap-2 mb-3">
-      <span className="w-full text-xs text-slate-400 dark:text-gray-400 mb-1">🎭 Tone:</span>
+      <span className="w-full text-xs text-gray-400 mb-1">🎭 Tone:</span>
       {TONES.map((tone) => {
         const isActive = selected === tone.label;
         return (
@@ -385,7 +372,7 @@ const TonePicker: React.FC<TonePickerProps> = ({ selected, onChange }) => {
             aria-pressed={isActive}
             title={isActive ? `Remove "${tone.label}" tone` : `Set tone to "${tone.label}"`}
             className={`
-              px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 cursor-pointer
+              px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200
               ${isActive
                 ? `${tone.activeClass} shadow-md scale-105`
                 : tone.inactiveClass
@@ -399,6 +386,13 @@ const TonePicker: React.FC<TonePickerProps> = ({ selected, onChange }) => {
     </div>
   );
 };
+
+interface ICharacter {
+  id: string;
+  name: string;
+  role: string;
+  personality: string;
+}
 
 const StoriesComponent = () => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -416,30 +410,19 @@ const StoriesComponent = () => {
     }
   }, []);
 
-  const [stories, setStories] = useState<IStories[]>(() => {
-    if (draft?.stories?.length) {
-      return getUniqueStories(draft.stories);
-    }
-    return [
-      {
-        uuid: "test-1",
-        title: "The Wizard's Journey",
-        content: "Merlin walked through the forest toward the castle. The village was far behind him. He crossed the bridge over the river and entered the dungeon beneath the tower. Dragons guarded the mountain beyond the valley. Elena watched from the palace window as Merlin approached the cave near the ocean shore.",
-        tag: "Fantasy",
-        imageURL: "https://via.placeholder.com/400x300",
-      },
-    ];
-  });
-
+  const [stories, setStories] = useState<IStories[]>(
+    draft?.stories?.length ? getUniqueStories(draft.stories) : []
+  );
+  
   const [loading, setLoading] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchFilter, setSearchFilter] = useState<string>("all");
 
+  const debouncedSearchQuery = useDebounce(searchQuery, 350);
+
   const filteredStories = useMemo(() => {
-    if (!searchQuery.trim()) return stories;
-    
-    const query = searchQuery.toLowerCase();
-    
+    if (!debouncedSearchQuery.trim()) return stories;
+    const query = debouncedSearchQuery.toLowerCase();
     return stories.filter((story) => {
       switch (searchFilter) {
         case "title":
@@ -457,38 +440,30 @@ const StoriesComponent = () => {
           );
       }
     });
-  }, [stories, searchQuery, searchFilter]);
+  }, [stories, debouncedSearchQuery, searchFilter]);
 
   const indexOfLastStory = currentPage * storiesPerPage;
   const indexOfFirstStory = indexOfLastStory - storiesPerPage;
-
-  const currentStories = useMemo(() => {
-    return filteredStories.slice(indexOfFirstStory, indexOfLastStory);
-  }, [filteredStories, indexOfFirstStory, indexOfLastStory]);
-
-  const totalPages = useMemo(() => {
-    return Math.ceil(filteredStories.length / storiesPerPage);
-  }, [filteredStories.length, storiesPerPage]);
+  const currentStories = filteredStories.slice(indexOfFirstStory, indexOfLastStory);
+  const totalPages = Math.ceil(filteredStories.length / storiesPerPage);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, searchFilter]);
+  }, [debouncedSearchQuery, searchFilter]);
 
   const { data } = useGetProfileInfoQuery(undefined);
   const userRole = getUserInfo();
   const login = isLoggedIn();
   const [generateModel] = useGenerateModelMutation();
   const [generateFreeModel] = useGenerateFreeModelMutation();
-  const [selectedPrompt, setSelectedPrompt] = useState<string>(" ");
+  const [selectedPrompt, setSelectedPrompt] = useState<string>("");
   const [showHelpModal, setShowHelpModal] = useState(false);
   
-  const [selectedGenre, setSelectedGenre] = useState<string>(() => {
-    if (draft?.genre) {
-      return GENRES.find((g) => g.name === draft.genre || g.value === draft.genre)?.value ?? "🧙 Fantasy";
-    }
-    return "🧙 Fantasy";
-  });
-  
+  const [selectedGenre, setSelectedGenre] = useState<string>(
+    draft?.genre
+      ? (GENRES.find((g) => g.name === draft.genre || g.value === draft.genre)?.value ?? "🧙 Fantasy")
+      : "🧙 Fantasy"
+  );
   const [selectedLength, setSelectedLength] = useState<string>(draft?.length || "medium");
   const [selectedTone, setSelectedTone] = useState<ToneLabel | "">(draft?.tone || "Dramatic");
   const [textareaValue, setTextareaValue] = useState<string>(location.state?.prompt || draft?.prompt || "");
@@ -496,6 +471,10 @@ const StoriesComponent = () => {
   const [selectedLanguage, setSelectedLanguage] = useState<string>(draft?.language || "English");
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState<boolean>(false);
   
+  // Custom characters cast setup states:
+  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
+  const [characters, setCharacters] = useState<ICharacter[]>([]);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -505,7 +484,7 @@ const StoriesComponent = () => {
   const isGenerationInProgressRef = useRef(false);
   
   const [guestRequestCount, setGuestRequestCount] = useState<number>(() =>
-    parseInt(localStorage.getItem("guestRequestCount") || "0", 10),
+    parseInt(localStorage.getItem("guestRequestCount") || "0", 10)
   );
   const [showLimitModal, setShowLimitModal] = useState<boolean>(false);
   const [isRecentPromptsOpen, setIsRecentPromptsOpen] = useState<boolean>(false);
@@ -513,6 +492,24 @@ const StoriesComponent = () => {
   
   const text = UI_TEXT[selectedLanguage] ?? UI_TEXT.English;
   const genreLabels = GENRE_LABELS[selectedLanguage] ?? GENRE_LABELS.English;
+
+  const playSoundtrack = (genre: string) => {
+    const soundtrack = soundtrackMap[genre];
+    if (!soundtrack) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+
+    const audio = new Audio(soundtrack);
+    audio.loop = true;
+    audio.volume = 0.3;
+    audio.play().catch((err) => {
+      console.log("Audio playback failed:", err);
+    });
+    audioRef.current = audio;
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -575,18 +572,16 @@ const StoriesComponent = () => {
       if (location.state.prompt) {
         setTextareaValue(location.state.prompt);
       }
-
       if (location.state.genre) {
         const matchedGenre = GENRES.find((g) => g.name === location.state.genre)?.value ?? "";
         setSelectedGenre(matchedGenre);
       }
-
       navigate(location.pathname, {
         replace: true,
         state: {},
       });
     }
-  }, [location, navigate]);
+  }, [location, navigate, setSelectedGenre, setTextareaValue]);
 
   useEffect(() => {
     setValue("prompt", textareaValue);
@@ -595,41 +590,10 @@ const StoriesComponent = () => {
   useEffect(() => {
     return () => {
       activeGenerationRef.current?.abort();
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
     };
   }, []);
 
-  const playSoundtrack = (genre: string) => {
-    const soundtrack = soundtrackMap[genre];
-    if (!soundtrack) return;
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-
-    const audio = new Audio(soundtrack);
-    audio.loop = true;
-    audio.volume = 0.3;
-    audio.play().catch((err) => {
-      console.log("Audio playback failed:", err);
-    });
-    audioRef.current = audio;
-  };
-
-  const handleCancelGeneration = (isTimeout = false) => {
-    activeGenerationRef.current?.abort();
-    activeGenerationRef.current = null;
-    isGenerationInProgressRef.current = false;
-    setLoading(false);
-    if (!isTimeout) {
-      toast("Story generation cancelled.");
-    }
-  };
-
-  const onSubmit: SubmitHandler<Inputs> = async (formData) => {
+  const onSubmit: SubmitHandler<Inputs> = async (data) => {
     if (isGenerationInProgressRef.current) return;
 
     if (!login && guestRequestCount >= 3) {
@@ -637,14 +601,30 @@ const StoriesComponent = () => {
       return;
     }
 
-    if (!formData.prompt.trim()) {
+    if (!data.prompt.trim()) {
       toast.error("Please enter a prompt to generate a story.");
       return;
     }
 
-    if (getWordCount(formData.prompt) < 10) {
+    if (getWordCount(data.prompt) < 10) {
       toast.error("Please enter a prompt with at least 10 words to generate a story.");
       return;
+    }
+
+    // Validate characters array
+    for (const char of characters) {
+      if (!char.name.trim()) {
+        toast.error("Please provide a name for all characters.");
+        return;
+      }
+      if (!char.role.trim()) {
+        toast.error("Please select a role for all characters.");
+        return;
+      }
+      if (!char.personality.trim()) {
+        toast.error("Please describe the personality/traits for all characters.");
+        return;
+      }
     }
 
     isGenerationInProgressRef.current = true;
@@ -661,23 +641,26 @@ const StoriesComponent = () => {
       }, 55000);
 
       const payload = {
-        prompt: selectedGenre ? `[Genre: ${selectedGenre}] ${formData.prompt}` : formData.prompt,
+        prompt: selectedGenre ? `[Genre: ${selectedGenre}] ${data.prompt}` : data.prompt,
         wordLength: selectedLength === "short" ? 175 : selectedLength === "long" ? 800 : 450,
         language: selectedLanguage,
         tone: selectedTone || undefined,
+        characters: characters.map(({ name, role, personality }) => ({ name, role, personality })),
       };
-      
+
       const generationRequest = login ? generateModel(payload) : generateFreeModel(payload);
       activeGenerationRef.current = generationRequest;
       const res = await generationRequest.unwrap();
       
       if (res) {
         toast.success(res.message);
-        addPrompt(formData.prompt);
+        addPrompt(data.prompt);
         setStories(res.data as IStories[]);
         setTextareaValue("");
         setSelectedPrompt("");
         setValue("prompt", "");
+        setCharacters([]);
+        setCurrentStep(1);
         if (selectedGenre) {
           playSoundtrack(selectedGenre);
         }
@@ -702,6 +685,16 @@ const StoriesComponent = () => {
     }
   };
 
+  const handleCancelGeneration = (isTimeout = false) => {
+    activeGenerationRef.current?.abort();
+    activeGenerationRef.current = null;
+    isGenerationInProgressRef.current = false;
+    setLoading(false);
+    if (!isTimeout) {
+      toast("Story generation cancelled.");
+    }
+  };
+
   const handleClearPrompt = () => {
     setTextareaValue("");
     setSelectedPrompt("");
@@ -715,6 +708,8 @@ const StoriesComponent = () => {
     setTextareaValue("");
     setSelectedPrompt("");
     setValue("prompt", "");
+    setCharacters([]);
+    setCurrentStep(1);
     reset();
   };
 
@@ -722,14 +717,51 @@ const StoriesComponent = () => {
   const isNearLimit = textareaValue.length >= MAX_PROMPT_LENGTH * WARN_THRESHOLD;
   const isGenerateDisabled = loading || isOverLimit || !textareaValue.trim();
 
+  const generateId = () => Math.random().toString(36).substring(2, 9);
+
+  const handleAddCharacter = () => {
+    setCharacters([
+      ...characters,
+      { id: generateId(), name: "", role: "Protagonist", personality: "" },
+    ]);
+  };
+
+  const handleCharacterChange = (id: string, field: keyof Omit<ICharacter, "id">, value: string) => {
+    setCharacters(
+      characters.map((char) => (char.id === id ? { ...char, [field]: value } : char))
+    );
+  };
+
+  const handleRemoveCharacter = (id: string) => {
+    setCharacters(characters.filter((char) => char.id !== id));
+  };
+
+  const handleNextStep = () => {
+    if (!textareaValue.trim()) {
+      toast.error("Please enter a prompt to generate a story.");
+      return;
+    }
+    if (getWordCount(textareaValue) < 10) {
+      toast.error("Please enter a prompt with at least 10 words to generate a story.");
+      return;
+    }
+    setCurrentStep(2);
+  };
+
   useKeyboardShortcuts({
     onOpenHelp: () => setShowHelpModal(true),
     onCloseHelp: () => setShowHelpModal(false),
     onGenerate: () => {
-      if (isGenerateDisabled) return;
-      if (inputRef.current) {
-        const form = inputRef.current.closest("form");
-        if (form) form.requestSubmit();
+      if (isGenerateDisabled) {
+        return;
+      }
+      if (currentStep === 1) {
+        handleNextStep();
+      } else {
+        if (inputRef.current) {
+          const form = inputRef.current.closest("form");
+          if (form) form.requestSubmit();
+        }
       }
     },
     onPublish: () => {
@@ -778,7 +810,7 @@ const StoriesComponent = () => {
               </span>
 
               <span className="h-3.5 w-px bg-slate-200 dark:bg-white/10" />
-              <Link to="/pricing" className="text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1.5 animate-pulse">
+              <Link to="/pricing" className="text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1.5">
                 <span>{text.upgrade}</span>
                 <i className="fas fa-bolt text-amber-400 text-[11px]" />
               </Link>
@@ -790,7 +822,7 @@ const StoriesComponent = () => {
           </div>
         </div>
 
-        <div className="mb-12 max-w-3xl mx-auto text-center select-none animate-fade-in-up">
+        <div className="mb-12 max-w-3xl mx-auto text-center select-none">
           <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
             ✨ {text.titleStart}{" "}
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
@@ -803,211 +835,316 @@ const StoriesComponent = () => {
         <div className="max-w-3xl mx-auto w-full box-border space-y-6">
           <div className="bg-white dark:bg-[#111827]/40 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm hover:shadow-xl transition-shadow duration-300 w-full box-border">
             <form className="space-y-6 w-full box-border" onSubmit={handleSubmit(onSubmit)}>
-              <div className="w-full box-border select-none">
-                <div className="flex flex-wrap gap-2">
-                  {GENRES.map((genre) => (
-                    <button
-                      key={genre.value}
-                      type="button"
-                      onClick={() => {
-                        const newGenre = selectedGenre === genre.value ? "" : genre.value;
-                        setSelectedGenre(newGenre);
-                        if (newGenre) {
-                          playSoundtrack(newGenre);
-                        } else if (audioRef.current) {
-                          audioRef.current.pause();
-                          audioRef.current.currentTime = 0;
+              {currentStep === 1 ? (
+                <>
+                  {/* Step 1 Content */}
+                  <div className="w-full box-border select-none">
+                    <div className="flex flex-wrap gap-2">
+                      {GENRES.map((genre) => (
+                        <button
+                          key={genre.value}
+                          type="button"
+                          onClick={() => {
+                            const newGenre = selectedGenre === genre.value ? "" : genre.value;
+                            setSelectedGenre(newGenre);
+                            if (newGenre) {
+                              playSoundtrack(newGenre);
+                            } else if (audioRef.current) {
+                              audioRef.current.pause();
+                              audioRef.current.currentTime = 0;
+                            }
+                          }}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold tracking-wide uppercase border transition-all duration-150 cursor-pointer active:scale-[0.97] ${
+                            selectedGenre === genre.value
+                              ? "bg-gradient-to-r from-blue-600 to-indigo-600 border-transparent text-white shadow-md shadow-blue-500/10"
+                              : "bg-slate-50 border-slate-200/60 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:border-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
+                          }`}
+                        >
+                          <span className="mr-1">{genre.icon}</span>
+                          <span>{genreLabels[genre.name]}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Tone picker row */}
+                  <div className="pt-2 border-t border-slate-100 dark:border-white/5 select-none">
+                    <TonePicker selected={selectedTone} onChange={setSelectedTone} />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-slate-100 dark:border-white/5 w-full box-border select-none">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1">📏 {text.length}:</span>
+                      {(["short", "medium", "long"] as const).map((length) => (
+                        <button
+                          key={length}
+                          type="button"
+                          onClick={() => setSelectedLength(length)}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wide border transition-all duration-150 cursor-pointer ${
+                            selectedLength === length
+                              ? "bg-blue-600 border-transparent text-white shadow-sm"
+                              : "bg-slate-50 border-slate-200/60 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:border-white/5 dark:text-slate-400 dark:hover:bg-white/10"
+                          }`}
+                        >
+                          {text[length]}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2" ref={languageDropdownRef}>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1">🌐 {text.language}:</span>
+                      <div className="relative">
+                        <button
+                          key="lang-selector-btn"
+                          type="button"
+                          onClick={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
+                          className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-50 text-slate-600 border border-slate-200 dark:bg-white/5 dark:border-white/5 dark:text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-100 dark:hover:bg-white/10 transition-all duration-150 cursor-pointer select-none"
+                        >
+                          <span>{LANGUAGES.find(l => l.name === selectedLanguage)?.name || "English"}</span>
+                          <span className="text-slate-400 dark:text-slate-500 text-[9px]">▼</span>
+                        </button>
+
+                        {isLanguageDropdownOpen && (
+                          <ul className="absolute right-0 z-20 mt-1.5 max-h-48 w-40 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl focus:outline-none divide-y divide-slate-100 dark:divide-white/5 p-1 box-border list-none m-0">
+                            {LANGUAGES.map((lang) => (
+                              <li key={lang.code} className="p-0 m-0 list-none">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedLanguage(lang.name);
+                                    setIsLanguageDropdownOpen(false);
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-colors duration-150 cursor-pointer ${
+                                    selectedLanguage === lang.name
+                                      ? "bg-blue-600 text-white font-bold"
+                                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                                  }`}
+                                >
+                                  {lang.name}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative border border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-slate-950/30 rounded-2xl p-4 transition-all focus-within:border-blue-500/30 focus-within:bg-white dark:focus-within:bg-[#111827]/20 w-full box-border">
+                    <textarea
+                      {...register("prompt")}
+                      ref={(el) => {
+                        register("prompt").ref(el);
+                        inputRef.current = el;
+                      }}
+                      className={`w-full h-32 sm:h-40 resize-none border-none outline-none bg-transparent text-slate-800 dark:text-slate-200 focus:ring-0 text-sm sm:text-base leading-relaxed placeholder:italic placeholder:text-slate-400 dark:placeholder:text-slate-500 pr-12 transition-colors duration-200 ${
+                        isOverLimit ? "ring-1 ring-red-500 rounded-lg p-2" : isNearLimit ? "ring-1 ring-yellow-400 rounded-lg p-2" : ""
+                      }`}
+                      placeholder={text.promptPlaceholder}
+                      value={textareaValue}
+                      maxLength={MAX_PROMPT_LENGTH}
+                      onChange={(e) => setTextareaValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleNextStep();
                         }
                       }}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold tracking-wide uppercase border transition-all duration-150 cursor-pointer active:scale-[0.97] ${
-                        selectedGenre === genre.value
-                          ? "bg-gradient-to-r from-blue-600 to-indigo-600 border-transparent text-white shadow-md shadow-blue-500/10"
-                          : "bg-slate-50 border-slate-200/60 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:border-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
-                      }`}
-                    >
-                      <span className="mr-1">{genre.icon}</span>
-                      <span>{genreLabels[genre.name]}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+                    />
 
-              {/* Tone selection */}
-              <TonePicker selected={selectedTone} onChange={setSelectedTone} />
+                    <div className="absolute right-3.5 top-3.5 flex flex-col gap-2.5">
+                      {textareaValue.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearPrompt}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 hover:text-red-500 dark:hover:text-red-400 shadow-sm transition-colors duration-150 cursor-pointer"
+                          aria-label={text.close}
+                          title={text.close}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
 
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-slate-100 dark:border-white/5 w-full box-border select-none">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1">📏 {text.length}:</span>
-                  {(["short", "medium", "long"] as const).map((length) => (
-                    <button
-                      key={length}
-                      type="button"
-                      onClick={() => setSelectedLength(length)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wide border transition-all duration-150 cursor-pointer ${
-                        selectedLength === length
-                          ? "bg-blue-600 border-transparent text-white shadow-sm"
-                          : "bg-slate-50 border-slate-200/60 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:border-white/5 dark:text-slate-400 dark:hover:bg-white/10"
-                      }`}
-                    >
-                      {text[length]}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-2" ref={languageDropdownRef}>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1">🌐 {text.language}:</span>
-                  <div className="relative">
-                    <button
-                      key="lang-selector-btn"
-                      type="button"
-                      onClick={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
-                      className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-50 text-slate-600 border border-slate-200 dark:bg-white/5 dark:border-white/5 dark:text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-100 dark:hover:bg-white/10 transition-all duration-150 cursor-pointer select-none"
-                    >
-                      <span>{LANGUAGES.find(l => l.name === selectedLanguage)?.name || "English"}</span>
-                      <span className="text-slate-400 dark:text-slate-500 text-[9px]">▼</span>
-                    </button>
-
-                    {isLanguageDropdownOpen && (
-                      <ul className="absolute right-0 z-20 mt-1.5 max-h-48 w-40 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl focus:outline-none divide-y divide-slate-100 dark:divide-white/5 p-1 box-border list-none m-0">
-                        {LANGUAGES.map((lang) => (
-                          <li key={lang.code} className="p-0 m-0 list-none">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedLanguage(lang.name);
-                                setIsLanguageDropdownOpen(false);
-                              }}
-                              className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-colors duration-150 cursor-pointer ${
-                                selectedLanguage === lang.name
-                                  ? "bg-blue-600 text-white font-bold"
-                                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
-                              }`}
-                            >
-                              {lang.name}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="relative border border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-slate-950/30 rounded-2xl p-4 transition-all focus-within:border-blue-500/30 focus-within:bg-white dark:focus-within:bg-[#111827]/20 w-full box-border">
-                <textarea
-                  {...register("prompt")}
-                  ref={(el) => {
-                    register("prompt").ref(el);
-                    inputRef.current = el;
-                  }}
-                  className={`w-full h-32 sm:h-40 resize-none border-none outline-none bg-transparent text-slate-800 dark:text-slate-200 focus:ring-0 text-sm sm:text-base leading-relaxed placeholder:italic placeholder:text-slate-400 dark:placeholder:text-slate-500 pr-12 transition-colors duration-200 ${
-                    isOverLimit ? "ring-1 ring-red-500 rounded-lg p-2" : isNearLimit ? "ring-1 ring-yellow-400 rounded-lg p-2" : ""
-                  }`}
-                  placeholder={text.promptPlaceholder}
-                  value={textareaValue}
-                  maxLength={MAX_PROMPT_LENGTH}
-                  onChange={(e) => setTextareaValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      const form = e.currentTarget.closest("form");
-                      if (form) form.requestSubmit();
-                    }
-                  }}
-                />
-
-                <div className="absolute right-3.5 top-3.5 flex flex-col gap-2.5">
-                  {textareaValue.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleClearPrompt}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 hover:text-red-500 dark:hover:text-red-400 shadow-sm transition-colors duration-150 cursor-pointer"
-                      aria-label={text.close}
-                      title={text.close}
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setIsRecentPromptsOpen(!isRecentPromptsOpen)}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm hover:bg-blue-500 transition-colors duration-150 cursor-pointer"
-                    aria-label={text.recentPrompts}
-                    title={text.recentPrompts}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-200/40 dark:border-white/5 select-none w-full box-border">
-                  <div className="flex-1 min-w-0 pr-4">
-                    {isOverLimit ? (
-                      <p className="text-[11px] font-semibold text-red-500 dark:text-red-400 flex items-center gap-1 truncate m-0">
-                        <span>⚠</span> {text.characterLimit}
-                      </p>
-                    ) : isNearLimit ? (
-                      <p className="text-[11px] font-semibold text-amber-500 dark:text-amber-400 flex items-center gap-1 truncate m-0">
-                        <span>⚠</span> {MAX_PROMPT_LENGTH - textareaValue.length} {text.charactersRemaining}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <span className={`text-[11px] font-bold tabular-nums shrink-0 ml-auto ${
-                    isOverLimit ? "text-red-500 dark:text-red-400" : isNearLimit ? "text-amber-500" : "text-slate-400"
-                  }`}>
-                    {textareaValue.length} / {MAX_PROMPT_LENGTH}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-[11px] font-medium leading-relaxed text-slate-400 dark:text-slate-500 select-none w-full box-border">
-                💡 <span className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mr-1">{text.keyboardTip}</span>
-                {text.press} <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Enter</kbd> {text.toGenerate} &bull;{" "}
-                <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Ctrl + Enter</kbd> {text.alsoWorks} &bull;{" "}
-                <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Shift + Enter</kbd> {text.forNewLine}
-              </div>
-
-              {/* Generate button row */}
-              <div className="flex justify-between items-center pt-2 w-full box-border">
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  {selectedTone && (
-                    <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                      {TONES.find((t) => t.label === selectedTone)?.emoji}{" "}
-                      <span className="font-bold uppercase tracking-wider text-[10px]">{selectedTone}</span>
                       <button
                         type="button"
-                        onClick={() => setSelectedTone("")}
-                        className="ml-1 text-slate-400 hover:text-red-500 cursor-pointer"
-                        aria-label="Remove tone"
+                        onClick={() => setIsRecentPromptsOpen(!isRecentPromptsOpen)}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm hover:bg-blue-500 transition-colors duration-150 cursor-pointer"
+                        aria-label={text.recentPrompts}
+                        title={text.recentPrompts}
                       >
-                        ×
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                       </button>
-                    </span>
-                  )}
-                </div>
+                    </div>
 
-                <button
-                  type="submit"
-                  disabled={isGenerateDisabled}
-                  aria-busy={loading}
-                  aria-disabled={isGenerateDisabled}
-                  className={`w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs sm:text-sm font-bold py-3 px-6 rounded-xl shadow-md shadow-blue-500/10 transition-all duration-150 active:scale-[0.98] select-none uppercase tracking-wider flex items-center justify-center gap-2 ${
-                    isGenerateDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                  } group`}
-                >
-                  {loading ? (
-                    <i className="fas fa-circle-notch text-sm animate-spin" />
+                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-200/40 dark:border-white/5 select-none w-full box-border">
+                      <div className="flex-1 min-w-0 pr-4">
+                        {isOverLimit ? (
+                          <p className="text-[11px] font-semibold text-red-500 dark:text-red-400 flex items-center gap-1 truncate m-0">
+                            <span>⚠</span> {text.characterLimit}
+                          </p>
+                        ) : isNearLimit ? (
+                          <p className="text-[11px] font-semibold text-amber-500 dark:text-amber-400 flex items-center gap-1 truncate m-0">
+                            <span>⚠</span> {MAX_PROMPT_LENGTH - textareaValue.length} {text.charactersRemaining}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <span className={`text-[11px] font-bold tabular-nums shrink-0 ml-auto ${
+                        isOverLimit ? "text-red-500 dark:text-red-400" : isNearLimit ? "text-amber-500" : "text-slate-400"
+                      }`}>
+                        {textareaValue.length} / {MAX_PROMPT_LENGTH}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] font-medium leading-relaxed text-slate-400 dark:text-slate-500 select-none w-full box-border">
+                    💡 <span className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mr-1">{text.keyboardTip}</span>
+                    {text.press} <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Enter</kbd> to continue &bull;{" "}
+                    <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Ctrl + Enter</kbd> also works &bull;{" "}
+                    <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Shift + Enter</kbd> {text.forNewLine}
+                  </div>
+
+                  <div className="flex justify-end pt-2 w-full box-border">
+                    <button
+                      type="button"
+                      onClick={handleNextStep}
+                      className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs sm:text-sm font-bold py-3 px-6 rounded-xl shadow-md shadow-blue-500/10 transition-all duration-150 active:scale-[0.98] select-none uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>Next: Cast of Characters ➡️</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Step 2 Content: Cast of Characters */}
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5 select-none w-full">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(1)}
+                      className="flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      ⬅️ Back to Story Details
+                    </button>
+                    <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Step 2 of 2</span>
+                  </div>
+
+                  <div className="space-y-2 select-none">
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Cast of Characters</h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Define custom characters to ensure Gemini maintains character roles, personality traits, and dynamic relationships consistently throughout the story.
+                    </p>
+                  </div>
+
+                  {/* Characters list */}
+                  {characters.length === 0 ? (
+                    <div className="py-8 text-center border-2 border-dashed border-slate-200 dark:border-white/5 rounded-2xl select-none">
+                      <p className="text-sm text-slate-400 dark:text-slate-500 mb-3">No characters added yet. Leave it empty to let Gemini generate the character cast automatically.</p>
+                      <button
+                        type="button"
+                        onClick={handleAddCharacter}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase tracking-wider bg-blue-600/5 hover:bg-blue-600/10 border border-blue-600/20 text-blue-600 dark:text-blue-400 dark:bg-blue-500/5 dark:hover:bg-blue-500/10 dark:border-blue-500/20 rounded-xl transition-all active:scale-[0.97] cursor-pointer"
+                      >
+                        <i className="fas fa-plus" />
+                        <span>Add First Character</span>
+                      </button>
+                    </div>
                   ) : (
-                    <i className="fas fa-wand-magic-sparkles text-sm group-hover:scale-110 transition-transform duration-200" />
+                    <div className="space-y-4">
+                      {characters.map((char, index) => (
+                        <div
+                          key={char.id}
+                          className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/5 rounded-2xl space-y-4 relative"
+                        >
+                          <div className="flex items-center justify-between select-none">
+                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                              👤 Character #{index + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCharacter(char.id)}
+                              className="text-xs font-bold text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 hover:underline cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Name</label>
+                              <input
+                                type="text"
+                                value={char.name}
+                                onChange={(e) => handleCharacterChange(char.id, "name", e.target.value)}
+                                placeholder="e.g. Leo, Sir Cedric, Bella"
+                                className="w-full px-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl outline-none focus:border-blue-500/40 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 placeholder:italic"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Role</label>
+                              <select
+                                value={char.role}
+                                onChange={(e) => handleCharacterChange(char.id, "role", e.target.value)}
+                                className="w-full px-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl outline-none focus:border-blue-500/40 text-slate-800 dark:text-slate-200"
+                              >
+                                <option value="Protagonist">Protagonist (Hero/Main Character)</option>
+                                <option value="Companion">Companion (Sidekick/Friend)</option>
+                                <option value="Rival">Rival (Competitor)</option>
+                                <option value="Antagonist">Antagonist (Villain/Obstacle)</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Personality & Traits</label>
+                            <textarea
+                              value={char.personality}
+                              onChange={(e) => handleCharacterChange(char.id, "personality", e.target.value)}
+                              placeholder="e.g. Brave but clumsy, loves eating carrots, afraid of the dark..."
+                              rows={2}
+                              className="w-full px-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl outline-none resize-none focus:border-blue-500/40 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 placeholder:italic"
+                            />
+                          </div>
+                        </div>
+                      ))}
+
+                      <div className="flex justify-start select-none">
+                        <button
+                          type="button"
+                          onClick={handleAddCharacter}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase tracking-wider bg-slate-50 border border-slate-200/80 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:border-white/5 dark:text-slate-400 dark:hover:bg-white/10 rounded-xl transition-all cursor-pointer"
+                        >
+                          <i className="fas fa-plus" />
+                          <span>Add Another Character</span>
+                        </button>
+                      </div>
+                    </div>
                   )}
-                  <span>{loading ? text.generating : text.generate}</span>
-                </button>
-              </div>
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-white/5 w-full box-border select-none">
+                    <button
+                      type="submit"
+                      disabled={loading || isOverLimit}
+                      aria-busy={loading}
+                      aria-disabled={loading || isOverLimit}
+                      className={`w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs sm:text-sm font-bold py-3 px-6 rounded-xl shadow-md shadow-blue-500/10 transition-all duration-150 active:scale-[0.98] select-none uppercase tracking-wider flex items-center justify-center gap-2 ${
+                        loading || isOverLimit ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                      } group`}
+                    >
+                      {loading ? (
+                        <i className="fas fa-circle-notch text-sm animate-spin" />
+                      ) : (
+                        <i className="fas fa-wand-magic-sparkles text-sm group-hover:scale-110 transition-transform duration-200" />
+                      )}
+                      <span>{loading ? text.generating : text.generate}</span>
+                    </button>
+                  </div>
+                </>
+              )}
             </form>
           </div>
 
@@ -1053,49 +1190,6 @@ const StoriesComponent = () => {
           </div>
         </div>
       </div>
-
-      {/* Search UI */}
-      {stories.length > 0 && (
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mb-6 w-full box-border">
-          <div className="bg-white dark:bg-[#111827]/40 border border-slate-200 dark:border-white/10 p-4 rounded-2xl shadow-sm w-full box-border text-left">
-            <div className="flex flex-col sm:flex-row gap-4 w-full box-border">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="Search stories..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-xl text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-blue-500/30"
-                />
-              </div>
-              <select
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                className="px-4 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-xl text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
-              >
-                <option value="all">All Fields</option>
-                <option value="title">Title</option>
-                <option value="content">Content</option>
-                <option value="genre">Genre</option>
-              </select>
-            </div>
-            {searchQuery && (
-              <div className="mt-2 text-xs font-semibold text-slate-400 dark:text-slate-500 select-none">
-                Found {filteredStories.length} {filteredStories.length === 1 ? 'story' : 'stories'}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Stories View */}
-      <StoriesViewComponent
-        stories={currentStories}
-        isLogin={login}
-        setStories={setStories}
-        onPublishSuccess={handlePublishSuccess}
-        isLoading={loading}
-      />
 
       <RecentPromptsPanel
         recentPrompts={recentPrompts}
@@ -1145,6 +1239,47 @@ const StoriesComponent = () => {
 
       {loading && <StoryGeneratingAnimation onCancel={handleCancelGeneration} />}
 
+      {/* Search UI */}
+      {stories.length > 0 && (
+        <div className="mb-6 bg-slate-800/80 backdrop-blur-xl border border-slate-700/50 p-4 rounded-2xl">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="Search stories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <select
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="all">All Fields</option>
+              <option value="title">Title</option>
+              <option value="content">Content</option>
+              <option value="genre">Genre</option>
+            </select>
+          </div>
+          {searchQuery && (
+            <div className="mt-2 text-sm text-slate-400">
+              Found {filteredStories.length} {filteredStories.length === 1 ? 'story' : 'stories'}
+            </div>
+          )}
+        </div>
+      )}
+
+      <StoriesViewComponent
+        stories={currentStories}
+        isLogin={login}
+        setStories={setStories}
+        onPublishSuccess={handlePublishSuccess}
+        isLoading={loading}
+      />
+
+      <div className="fixed top-[-200px] left-[250px] w-[800px] h-[350px] bg-blue-500/20 rounded-full blur-3xl -z-10"></div>
       {showLimitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white border border-slate-200 dark:border-white/10 rounded-2xl shadow-xl max-w-md w-full p-6 text-slate-900 dark:bg-slate-900 dark:text-white">
@@ -1176,23 +1311,25 @@ const StoriesComponent = () => {
           </div>
         </div>
       )}
-
+     
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-4 mt-6">
           <button
             onClick={() => setCurrentPage((p) => p - 1)}
             disabled={currentPage === 1}
-            className="px-4 py-2 rounded bg-slate-700 text-white disabled:opacity-50"
+            className="px-4 py-2 rounded bg-slate-700 text-white disabled:opacity-50 cursor-pointer"
           >
             Previous
           </button>
+
           <span>
             Page {currentPage} of {totalPages}
           </span>
+
           <button
             onClick={() => setCurrentPage((p) => p + 1)}
             disabled={currentPage === totalPages}
-            className="px-4 py-2 rounded bg-slate-700 text-white disabled:opacity-50"
+            className="px-4 py-2 rounded bg-slate-700 text-white disabled:opacity-50 cursor-pointer"
           >
             Next
           </button>
