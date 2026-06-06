@@ -6,6 +6,12 @@ import toast, { Toaster } from "react-hot-toast";
 import { useCreatePostMutation, useDeletePostMutation } from "../../redux/apis/post.api";
 import { useGetProfileInfoQuery } from "../../redux/apis/user.api";
 import jsPDF from "jspdf";
+import {
+  fetchImageAsBlob,
+  blobToBase64,
+  exportStoryToPDF,
+  exportStoryToEPUB
+} from "../../services/export.service";
 import StoryWorldMap from "../story-map/StoryWorldMap";
 import StoryRemix from "../remix/StoryRemix";
 import BookmarkButton from "../BookmarkButton";
@@ -217,6 +223,11 @@ const StoriesViewComponent: React.FC<StoriesComponentProps> = ({
   // Error handling states
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Export states
+  const [exportState, setExportState] = useState<"idle" | "processing" | "compiling" | "success" | "error">("idle");
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState<boolean>(false);
+  const dropdownMenuRef = useRef<HTMLDivElement>(null);
+
   // Standard functional states
   const [selectedStory, setSelectedStory] = useState<IStories | null>(null);
   const [topics, setTopics] = useState<ITopicData[]>(topicsData);
@@ -244,6 +255,75 @@ const StoriesViewComponent: React.FC<StoriesComponentProps> = ({
 
   const [generateAlternateEndings] = useGenerateAlternateEndingsMutation();
   const [generateFreeAlternateEndings] = useGenerateFreeAlternateEndingsMutation();
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownMenuRef.current && !dropdownMenuRef.current.contains(event.target as Node)) {
+        setIsExportDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const handleExport = async (format: "pdf" | "epub") => {
+    if (!selectedStory) return;
+    
+    setIsExportDropdownOpen(false);
+    setExportState("processing");
+    const toastId = toast.loading(`Preparing story for ${format.toUpperCase()} export...`);
+
+    try {
+      let imageBlob: Blob | null = null;
+      let base64Image: string | null = null;
+
+      if (selectedStory.imageURL) {
+        try {
+          imageBlob = await fetchImageAsBlob(selectedStory.imageURL);
+          base64Image = await blobToBase64(imageBlob);
+        } catch (err) {
+          console.error("Could not fetch story illustration for export:", err);
+          toast.error("Story illustration could not be loaded. Exporting text only.");
+        }
+      }
+
+      setExportState("compiling");
+      toast.loading(`Compiling ${format.toUpperCase()} file...`, { id: toastId });
+
+      if (format === "pdf") {
+        await exportStoryToPDF(selectedStory, base64Image);
+      } else {
+        await exportStoryToEPUB(selectedStory, imageBlob);
+      }
+
+      setExportState("success");
+      toast.success(`${format.toUpperCase()} downloaded successfully!`, { id: toastId });
+      setTimeout(() => setExportState("idle"), 2000);
+    } catch (err) {
+      console.error(`Failed to export to ${format}:`, err);
+      setExportState("error");
+      toast.error(`Failed to generate ${format.toUpperCase()}.`, { id: toastId });
+      setTimeout(() => setExportState("idle"), 2000);
+    }
+  };
+
+  const getExportButtonText = () => {
+    switch (exportState) {
+      case "processing":
+        return "Processing Images...";
+      case "compiling":
+        return "Compiling Book...";
+      case "success":
+        return "Success!";
+      case "error":
+        return "Failed";
+      default:
+        return "📥 Export Story";
+    }
+  };
 
   useEffect(() => {
     if (selectedStory && !originalStoryContent[selectedStory.uuid]) {
@@ -363,23 +443,77 @@ const StoriesViewComponent: React.FC<StoriesComponentProps> = ({
       <div className="max-w-4xl mx-auto space-y-6">
         {selectedStory ? (
           <div className="bg-slate-800 border border-slate-700/50 p-6 rounded-2xl shadow-xl">
-            <h2 className="text-2xl font-black mb-2">{selectedStory.title}</h2>
-            <div className="prose prose-invert max-w-none text-slate-300 leading-relaxed mb-6">
-              {selectedStory.content}
+            <h2 className="text-2xl font-black mb-4">{selectedStory.title}</h2>
+            
+            <div className="flex flex-col md:flex-row gap-6 mb-6">
+              {selectedStory.imageURL && (
+                <div className="w-full md:w-1/3 shrink-0">
+                  <div className="rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shadow-md">
+                    <img
+                      src={selectedStory.imageURL}
+                      alt={selectedStory.title}
+                      className="w-full h-auto object-cover max-h-[300px] md:max-h-none"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="flex-1 prose prose-invert max-w-none text-slate-300 leading-relaxed">
+                {selectedStory.content}
+              </div>
             </div>
 
-            {/* Step 17: Generate Button disables during loading phase */}
-            <button
-              onClick={handleGenerateAlternateEndings}
-              disabled={isGeneratingEndings}
-              className={`px-5 py-2.5 rounded-xl font-bold transition-all text-white ${
-                isGeneratingEndings 
-                  ? "bg-slate-700 cursor-not-allowed opacity-50" 
-                  : "bg-indigo-600 hover:bg-indigo-500 active:scale-95 shadow-md shadow-indigo-600/20"
-              }`}
-            >
-              {isGeneratingEndings ? "Generating Endings..." : "Generate Alternate Endings"}
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Step 17: Generate Button disables during loading phase */}
+              <button
+                onClick={handleGenerateAlternateEndings}
+                disabled={isGeneratingEndings}
+                className={`px-5 py-2.5 rounded-xl font-bold transition-all text-white ${
+                  isGeneratingEndings 
+                    ? "bg-slate-700 cursor-not-allowed opacity-50" 
+                    : "bg-indigo-600 hover:bg-indigo-500 active:scale-95 shadow-md shadow-indigo-600/20"
+                }`}
+              >
+                {isGeneratingEndings ? "Generating Endings..." : "Generate Alternate Endings"}
+              </button>
+
+              {/* Export Story Dropdown Menu */}
+              <div className="relative inline-block text-left" ref={dropdownMenuRef}>
+                <button
+                  type="button"
+                  disabled={exportState !== "idle"}
+                  onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                  className={`px-5 py-2.5 rounded-xl font-bold transition-all text-white flex items-center gap-2 ${
+                    exportState !== "idle"
+                      ? "bg-slate-700 cursor-not-allowed opacity-50"
+                      : "bg-emerald-600 hover:bg-emerald-500 active:scale-95 shadow-md shadow-emerald-600/20 cursor-pointer"
+                  }`}
+                >
+                  {getExportButtonText()}
+                </button>
+
+                {isExportDropdownOpen && (
+                  <div className="absolute left-0 mt-2 z-50 w-56 rounded-xl bg-slate-800 border border-slate-700 shadow-xl p-1 animate-fadeIn">
+                    <button
+                      type="button"
+                      onClick={() => handleExport("pdf")}
+                      className="w-full text-left px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-slate-700 hover:text-white rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>📄</span> Download Printable PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExport("epub")}
+                      className="w-full text-left px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-slate-700 hover:text-white rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>📘</span> Download Kindle EPUB
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           <div className="text-center py-12 text-slate-500">No stories available.</div>

@@ -47,7 +47,6 @@ import ReportBug from "./components/report-bug/ReportBug";
 import ResourceDetailComponent from "./components/community/resource_detail.component";
 import ResourcesListComponent from "./components/community/resources_list.component";
 import ScrollToTop from "./components/ScrollToTop";
-import ScrollToTopButton from "./components/ScrollToTopButton";
 import SettingComponent from "./components/dashboard/settings/settings.component";
 import SignUpComponent from "./components/signup/signup.component";
 import SimpleProtectedRoute from "./components/ProtectedRoute";
@@ -86,7 +85,7 @@ const router = createBrowserRouter([
     path: "/",
     element: (
       <>
-        <ScrollToTopButton />
+        
         <MagicCursorComponent />
         <ScrollToTop />
         <RootLayout>
