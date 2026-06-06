@@ -17,7 +17,7 @@ import { GamificationService } from "../gamification/gamification.service";
 const MAX_SEARCH_TERM_LENGTH = 100;
 
 const escapeRegex = (text: string): string => {
-  return text.replace(/[-[\]{}()*+?.,\^$|#\s]/g, "\$&");
+  return text.replace(/[-[\]{}()*+?.,\^$|#\s]/g, "\\$&");
 };
 
 interface ICursorPayload {
