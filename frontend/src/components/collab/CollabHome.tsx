@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { connectSocket } from "../../socket/socket.oi";
+import { connectSocket, getSocketIo } from "../../socket/socket.oi";
 import { getUserInfo, isLoggedIn } from "../../services/auth.service";
 
 interface CreateRoomResponse {
