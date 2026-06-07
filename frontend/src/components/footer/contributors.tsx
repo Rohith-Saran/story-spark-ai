@@ -1,8 +1,4 @@
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Globe, GitPullRequest, Users } from "lucide-react";
-import ImageFallback from "../ImageFallback";
-
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Globe,
   GitPullRequest,
@@ -95,8 +91,9 @@ const ParticleField = () => {
             ctx.beginPath();
             ctx.moveTo(particles[i].x, particles[i].y);
             ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.strokeStyle = `hsla(240, 60%, 70%, ${0.06 * (1 - dist / 100)
-              })`;
+            ctx.strokeStyle = `hsla(240, 60%, 70%, ${
+              0.06 * (1 - dist / 100)
+            })`;
             ctx.lineWidth = 0.5;
             ctx.stroke();
           }
@@ -182,19 +179,19 @@ const ContributorCard = ({
     {
       glow: "rgba(251,191,36,0.3)",
       badge: "bg-gradient-to-r from-amber-400 to-yellow-500",
-      label: "🥇",
+      label: "\uD83E\uDD47",
       borderColor: "rgba(251,191,36,0.4)",
     },
     {
       glow: "rgba(148,163,184,0.3)",
       badge: "bg-gradient-to-r from-slate-300 to-gray-400",
-      label: "🥈",
+      label: "\uD83E\uDD48",
       borderColor: "rgba(148,163,184,0.3)",
     },
     {
       glow: "rgba(251,146,60,0.25)",
       badge: "bg-gradient-to-r from-orange-400 to-amber-600",
-      label: "🥉",
+      label: "\uD83E\uDD49",
       borderColor: "rgba(251,146,60,0.3)",
     },
   ];
@@ -290,8 +287,9 @@ const ContributorCard = ({
         background: isTop3
           ? `linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(30,27,75,0.7) 50%, rgba(15,23,42,0.9) 100%)`
           : `linear-gradient(135deg, rgba(15,23,42,0.8) 0%, rgba(20,20,50,0.5) 100%)`,
-        border: `1px solid ${isTop3 ? rank!.borderColor : "rgba(148,163,184,0.08)"
-          }`,
+        border: `1px solid ${
+          isTop3 ? rank!.borderColor : "rgba(148,163,184,0.08)"
+        }`,
         transformStyle: "preserve-3d",
         transition: "box-shadow 0.3s ease",
       }}
@@ -320,10 +318,11 @@ const ContributorCard = ({
       {/* Avatar */}
       <div className="relative mb-5" style={{ transform: "translateZ(30px)" }}>
         <div
-          className={`absolute inset-[-4px] rounded-full transition-opacity duration-500 ${isTop3
+          className={`absolute inset-[-4px] rounded-full transition-opacity duration-500 ${
+            isTop3
               ? "opacity-40 group-hover:opacity-70"
               : "opacity-0 group-hover:opacity-30"
-            }`}
+          }`}
           style={{
             background: isTop3 ? rank!.glow : "rgba(99,102,241,0.4)",
             filter: "blur(12px)",
@@ -402,7 +401,7 @@ const ContributorsComponent = () => {
         const data = await response.json();
         if (Array.isArray(data)) {
           const filtered = data.filter(
-            (contributor: Contributor) => contributor.contributions >= 1
+            (c: Contributor) => c.contributions >= 3
           );
           setContributors(filtered);
         }
@@ -663,7 +662,7 @@ const ContributorsComponent = () => {
           </div>
 
           <p className="hero-subtitle mt-8 text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            The brilliant minds behind StorySparkAI — building, iterating, and
+            The brilliant minds behind StorySparkAI - building, iterating, and
             pushing the boundaries of AI-powered storytelling.
           </p>
 
@@ -854,53 +853,29 @@ const ContributorsComponent = () => {
                   boxShadow: "0 8px 32px rgba(99,102,241,0.3)",
                 }}
               >
-                <div className="relative mb-5">
-                  <ImageFallback
-                    src={contributor.avatar_url}
-                    alt={contributor.login}
-                    className="h-24 w-24 rounded-full border-4 border-blue-500/20 object-cover transition-all duration-300 group-hover:border-blue-400/50"
-                  />
-
-                  <div className="absolute inset-0 rounded-full bg-blue-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                </div>
-
-                <h3 className="text-lg font-semibold text-white">
-                  {contributor.login}
-                </h3>
-
-                <p className="mt-2 text-sm text-slate-400">
-                  {contributor.contributions} contributions
-                </p>
-
-                <div className="mt-4 inline-flex items-center gap-2 text-blue-300 text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <Globe size={16} />
-                  View Profile
-                </div>
-              </motion.a>
-            ))}
-              <Code2
-                size={20}
-                className="transition-transform duration-300 group-hover:rotate-12"
-              />
-              Start Contributing
-              <ExternalLink
-                size={16}
-                className="transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1"
-              />
-            </a>
+                <Code2
+                  size={20}
+                  className="transition-transform duration-300 group-hover:rotate-12"
+                />
+                Start Contributing
+                <ExternalLink
+                  size={16}
+                  className="transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1"
+                />
+              </a>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-      {/* Keyframes */ }
-  <style>{`
+      {/* Keyframes */}
+      <style>{`
         @keyframes contributorsGradientShift {
           0%, 100% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
         }
       `}</style>
-    </div >
+    </div>
   );
 };
 
