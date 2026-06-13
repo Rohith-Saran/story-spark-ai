@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { Link } from "react-router-dom";
 
@@ -10,7 +10,7 @@ import {
   useLoginUserMutation,
   useGoogleLoginMutation,
 } from "../../redux/apis/auth.api";
-import { storeUserInfo } from "../../services/auth.service";
+import AuthContext from "../auth.context";
 import RedirectComponent from "../redirect.component";
 
 import toast, { Toaster } from "react-hot-toast";
@@ -32,6 +32,7 @@ const LoginComponent = () => {
     formState: { errors },
   } = useForm<Inputs>({ mode: "onChange" });
 
+  const { login } = useContext(AuthContext) ?? { login: () => {} };
   const [isBusy, setIsBusy] = useState<boolean>(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
@@ -41,7 +42,7 @@ const LoginComponent = () => {
       const res = await loginUser({ ...data }).unwrap();
       if (res.data.accessToken) {
         toast.success("User logged in successfully!");
-        storeUserInfo({ accessToken: res.data.accessToken });
+        login(res.data.accessToken);
         setIsLoggedIn(true);
       }
     } catch {
@@ -52,11 +53,6 @@ const LoginComponent = () => {
   };
 
 
-  const handleGoogleLoginSuccess = async (
-    credentialResponse: CredentialResponse
-  ) => {
-  const handleGoogleLoginSuccess = async (credentialResponse: CredentialResponse,) => {
-
   const handleGoogleLoginSuccess = async (credentialResponse: CredentialResponse) => {
     setIsBusy(true);
     try {
@@ -65,7 +61,7 @@ const LoginComponent = () => {
       }).unwrap();
       if (res.data.accessToken) {
         toast.success("User logged in successfully with Google!");
-        storeUserInfo({ accessToken: res.data.accessToken });
+        login(res.data.accessToken);
         setIsLoggedIn(true);
       }
     } catch {
