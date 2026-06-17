@@ -15,6 +15,7 @@ import storyRoutes from "../routes/story.routes";
 import { ReportRouter } from "../app/modules/report/report.router";
 import { NewsletterRouter } from "../app/modules/newsletter/newsletter.route";
 import paymentRouter from "../router/payment.route";
+import { AIEditorRouter } from "../app/modules/ai_editor/ai_editor.router";
 import { BookmarkRouter } from "../app/modules/bookmark/bookmark.router";
 import { StoryVersionRouter } from "../app/modules/story_version/story_version.router";
 import { AnalyticsRouter } from "../app/modules/analytics/analytics.router";
@@ -25,7 +26,10 @@ import { StoryVisualizerRouter } from "../app/modules/story_visualizer/story_vis
 import { StoryInspirationRouter } from "../app/modules/story_inspiration/story_inspiration.router";
 import { EngagementRouter } from "../app/modules/engagement/engagement.router";
 import { ChatRouter } from "../app/modules/chat/chat.router";
-
+import { PlotHoleRouter } from "../app/modules/plot_hole_detector/plot_hole.router";
+import { StoryRatingRouter } from "../app/modules/story_rating/story_rating.router";
+import PromptAnalysisRouter from "../app/modules/prompt_analysis/prompt_analysis.router";
+import { StoryConsistencyRouter } from "../app/modules/story_consistency/story_consistency.router";
 const router = express.Router();
 
 const modules = [
@@ -81,57 +85,22 @@ const modules = [
     path: "/bookmarks",
     router: BookmarkRouter,
   },
+
   {
-    path: "/payment",
-    router: paymentRouter,
+    path: "/story-consistency",
+    router: StoryConsistencyRouter,
   },
   {
-    path: "/story",
-    router: StoryVersionRouter,
+    path: "/prompt-analysis",
+    router: PromptAnalysisRouter,
   },
   {
-    path: "/analytics",
-    router: AnalyticsRouter,
+    path: "/story-rating",
+    router: StoryRatingRouter,
   },
   {
-    path: "/stories",
-    router: StoriesRouter,
-  },
-  {
-    path: "/story-continuation",
-    router: storyRoutes,
-  },
-  {
-    path: "/story-inspiration",
-    router: StoryInspirationRouter,
-  },
-  {
-    path: "/engagement",
-    router: EngagementRouter,
-  },
-  {
-    path: "/contact",
-    router: ContactRoutes,
-  },
-  {
-    path: "/reports",
-    router: ReportRouter,
-  },
-  {
-    path: "/bug-reports",
-    router: BugReportRouter,
-  },
-  {
-    path: "/recommendations",
-    router: RecommendationRouter,
-  },
-  {
-    path: "/writer-applications",
-    router: WriterApplicationRoutes,
-  },
-  {
-    path: "/chat",
-    router: ChatRouter,
+    path: "/plot-holes",
+    router: PlotHoleRouter,
   },
 ];
 

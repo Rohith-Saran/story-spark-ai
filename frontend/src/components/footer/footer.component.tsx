@@ -73,7 +73,7 @@ const FooterComponent: React.FC = () => {
   ];
 
   const legalLinks = [
-    { label: "Privacy", to: "/privacy-policy" },
+    { label: "Privacy Policy", to: "/privacy-policy" },
     { label: "Cookie Policy", to: "/cookie-policy" },
     { label: "Terms & Conditions", to: "/terms" },
     { label: "Guidelines", to: "/guidelines" },
@@ -243,7 +243,7 @@ const FooterComponent: React.FC = () => {
             <form
               onSubmit={handleSubscribe}
               noValidate
-              className="mt-1 flex flex-col gap-2 rounded-xl border border-white/[0.08] bg-[#0D1630]/60 p-2 backdrop-blur-sm transition-all duration-300 focus-within:border-blue-500/30"
+              className="mt-1 flex flex-col gap-2"
             >
               <div className="flex items-center gap-2 h-11 rounded-lg bg-[#0B1228]/60 px-3 border border-white/[0.06]">
                 <i
@@ -251,6 +251,9 @@ const FooterComponent: React.FC = () => {
                   aria-hidden="true"
                 />
                 <input
+                  id="newsletter-email-footer"
+                  name="email"
+                  autoComplete="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -312,7 +315,7 @@ const FooterComponent: React.FC = () => {
                   {label}
                 </Link>
                 {i < legalLinks.length - 1 && (
-                  <span className="text-white/[0.12]">|</span>
+                  <span className="text-white/12">|</span>
                 )}
               </React.Fragment>
 

@@ -1,19 +1,13 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import StoriesViewComponent, { IStories } from "./stories.view.component";
-import RecentPromptsPanel from "./RecentPromptsPanel";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { getUserInfo, isLoggedIn } from "../../services/auth.service";
-import { getRequestLimit, getWordCount, prompts } from "./stories.utils";
-import {
-  useGenerateFreeModelMutation,
-  useGenerateModelMutation,
-} from "../../redux/apis/ai.model.api";
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import { getShortenedText, ITopicData, topicsData, getWordCount, SELECTED_TOPIC_CLASSES } from "./stories.utils";
+import { formatReadingStats } from "../../utils/story-utils";
 import toast, { Toaster } from "react-hot-toast";
-import { SubmitHandler, useForm } from "react-hook-form";
+import { useCreatePostMutation, useDeletePostMutation } from "../../redux/apis/post.api";
 import { useGetProfileInfoQuery } from "../../redux/apis/user.api";
-import { getErrorMessage } from "../../error/error.message";
-import useKeyboardShortcuts from "../../hooks/useKeyboardShortcuts";
-import { useRecentPrompts } from "../../hooks/useRecentPrompts";
+import jsPDF from "jspdf";
+import StoryWorldMap from "../story-map/StoryWorldMap";
+import BookmarkButton from "../BookmarkButton";
+import logo from "../../assets/logoNew.png";
 import StoryGeneratingAnimation from "../loading/story-generating-animation.component";
 import { useDebounce } from "../../hooks/useDebounce";
 
@@ -33,7 +27,8 @@ type Inputs = {
 };
 
 const MAX_PROMPT_LENGTH = 2000;
-const WARN_THRESHOLD = 0.85;
+const WARN_THRESHOLD = 0.8;
+const DANGER_THRESHOLD = 0.95;
 
 const LANGUAGES = [
   { code: "en", name: "English" },
@@ -47,7 +42,7 @@ const LANGUAGES = [
   { code: "bn", name: "Bengali" },
   { code: "ta", name: "Tamil" },
   { code: "te", name: "Telugu" },
-  { code: "mr", name: "Marathi" }
+  { code: "mr", name: "Marathi" },
 ];
 
 const GENRES = [
@@ -60,6 +55,7 @@ const GENRES = [
   { value: "🔍 Mystery", icon: "🔍", name: "Mystery" },
   { value: "🌟 Adventure", icon: "🌟", name: "Adventure" },
 ] as const;
+
 
 type GenreName = (typeof GENRES)[number]["name"];
 
@@ -97,7 +93,7 @@ const GENRE_LABELS: Record<string, Record<GenreName, string>> = {
     "Sci-Fi": "SF", Fantasy: "판타지", Mystery: "미스터리", Adventure: "모험",
   },
   Bengali: {
-    Drama: "नाटक", Comedy: "কৌতুক", Horror: "ভৌতিক", Romance: "প্রেম",
+    Drama: "নাটক", Comedy: "কৌতुक", Horror: "ভৌতিক", Romance: "প্রেম",
     "Sci-Fi": "বিজ্ঞান কল্পকাহিনি", Fantasy: "কল্পনা", Mystery: "রহস্য", Adventure: "অভিযান",
   },
   Tamil: {
@@ -106,11 +102,11 @@ const GENRE_LABELS: Record<string, Record<GenreName, string>> = {
   },
   Telugu: {
     Drama: "నాటకం", Comedy: "హాస్యం", Horror: "భయానకం", Romance: "ప్రేమ",
-    "Sci-Fi": "విజ్ఞాన కథ", Fantasy: "கాల్పనికం", Mystery: "రహస్యం", Adventure: "సాహసం",
+    "Sci-Fi": "విజ్ఞాన కథ", Fantasy: "కాల్పనికం", Mystery: "రహస్యం", Adventure: "సాహసం",
   },
   Marathi: {
     Drama: "नाटक", Comedy: "विनोद", Horror: "भयकथा", Romance: "प्रेमकथा",
-    "Sci-Fi": "विज्ञानकथा", Fantasy: "कल्पनारम्य", Mystery: "रहस्य", Adventure: "साहस",
+    "Sci-Fi": "विज्ञानकथा", Fantasy: "कल्पनादम्य", Mystery: "रहस्य", Adventure: "साहस",
   },
 };
 
@@ -219,7 +215,7 @@ const UI_TEXT: Record<string, UiText> = {
     short: "छोटी", medium: "मध्यम", long: "लंबी", promptPlaceholder: "हर महान कहानी एक विचार से शुरू होती है। आपका विचार क्या है?",
     keyboardTip: "कीबोर्ड सुझाव:", press: "दबाएं", toGenerate: "बनाने के लिए", alsoWorks: "भी काम करता है", forNewLine: "नई पंक्ति के लिए",
     generating: "बन रही है...", generate: "बनाएं", examples: "इन उदाहरण संकेतों का उपयोग करें:",
-    selectPrompt: "एक संकेत चुनें", characterLimit: "अक्षर सीमा पूरी - निर्माण अक्षम है", charactersRemaining: "अक्षर शेष",
+    selectPrompt: "एक संकेत संकेत चुनें", characterLimit: "अक्षर सीमा पूरी - निर्माण अक्षम है", charactersRemaining: "अक्षर शेष",
     shortcuts: "कीबोर्ड शॉर्टकट", openHelp: "सहायता खोलें", closeHelp: "सहायता बंद करें", focusPrompt: "संकेत पर जाएं",
     generateStory: "कहानी बनाएं", publishStory: "कहानी प्रकाशित करें", close: "बंद करें", freeLimitReached: "मुफ्त सीमा पूरी",
     freeLimitMessage: "आपने सभी 3 मुफ्त कहानी निर्माण उपयोग कर लिए हैं। आगे जारी रखने के लिए लॉग इन करें।", continueBrowsing: "ब्राउज़ करना जारी रखें", recentPrompts: "हाल के संकेत", usePrompt: "उपयोग करें", delete: "हटाएं", clearAll: "सब साफ करें", noRecentPrompts: "कोई हाल के संकेत नहीं",
@@ -258,7 +254,7 @@ const UI_TEXT: Record<string, UiText> = {
     selectPrompt: "프롬프트 선택", characterLimit: "글자 수 제한 도달 - 생성할 수 없습니다", charactersRemaining: "글자 남음",
     shortcuts: "키보드 단축키", openHelp: "도움말 열기", closeHelp: "도움말 닫기", focusPrompt: "프롬프트에 초점",
     generateStory: "이야기 생성", publishStory: "이야기 게시", close: "닫기", freeLimitReached: "무료 한도 도달",
-    freeLimitMessage: "무료 이야기 생성 3회를 모두 사용했습니다. 계속하려면 로그인하세요.", continueBrowsing: "계속 둘러보기", recentPrompts: "최근 프롬프트", usePrompt: "사용", delete: "삭제", clearAll: "모두 지우기", noRecentPrompts: "최근 프롬프트가 없습니다",
+    freeLimitMessage: "무료 이야기 생성을 3회 모두 사용했습니다. 계속하려면 로그인하세요.", continueBrowsing: "계속 둘러보기", recentPrompts: "최근 프롬프트", usePrompt: "사용", delete: "삭제", clearAll: "모두 지우기", noRecentPrompts: "최근 프롬프트가 없습니다",
   },
   Bengali: {
     back: "ফিরে যান", freeAccess: "৩টি অনুরোধের জন্য বিনামূল্যে ব্যবহার", login: "লগ ইন", forMore: "করে আরও পান!",
@@ -268,33 +264,33 @@ const UI_TEXT: Record<string, UiText> = {
     keyboardTip: "কীবোর্ড টিপ:", press: "চাপুন", toGenerate: "তৈরি করতে", alsoWorks: "এটিও কাজ করে", forNewLine: "নতুন লাইনের জন্য",
     generating: "তৈরি হচ্ছে...", generate: "তৈরি করুন", examples: "কিছু উদাহরণ প্রম্পট:",
     selectPrompt: "একটি প্রম্পট বেছে নিন", characterLimit: "অক্ষরের সীমা পূর্ণ - তৈরি বন্ধ", charactersRemaining: "অক্ষর বাকি",
-    shortcuts: "কীবোর্ড শর্টকাট", openHelp: "সহায়তা খুলুন", closeHelp: "সহায়ता বন্ধ করুন", focusPrompt: "প্রম্পটে যান",
+    shortcuts: "কীবোর্ড শর্টকাট", openHelp: "সহায়তা খুলুন", closeHelp: "সহায়তা বন্ধ করুন", focusPrompt: "প্রম্পটে যান",
     generateStory: "গল্প তৈরি করুন", publishStory: "গল্প প্রকাশ করুন", close: "বন্ধ করুন", freeLimitReached: "বিনামূল্যের সীমা পূর্ণ",
     freeLimitMessage: "আপনি ৩টি বিনামূল্যের গল্প তৈরি ব্যবহার করেছেন। চালিয়ে যেতে লগ ইন করুন।", continueBrowsing: "ব্রাউজ চালিয়ে যান", recentPrompts: "সম্প্রতি ব্যবহৃত প্রম্পট", usePrompt: "ব্যবহার করুন", delete: "মুছে ফেলুন", clearAll: "সব মুছে দিন", noRecentPrompts: "কোনো সম্প্রতি ব্যবহৃত প্রম্পট নেই",
   },
   Tamil: {
-    back: "திரும்பு", freeAccess: "3 கோரிக்கைகளுக்கு இலவச அணுகல்", login: "உள்நுழை", forMore: "செய்து மேலும் பெறுங்கள்!",
+    back: "திரும்புக", freeAccess: "3 கோரிக்கைகளுக்கு இலவச அணுகல்", login: "உள்நுழை", forMore: "செய்து மேலும் பெறுங்கள்!",
     perMonth: "மாதத்திற்கு", upgrade: "மேம்படுத்து", monthlyRequests: "இந்த மாத கோரிக்கைகள்", totalPosts: "மொத்த பதிவுகள்",
     titleStart: "உங்கள் எண்ணங்களை", titleAccent: "அற்புத கதைகளாக மாற்றுங்கள்!", length: "நீளம்", language: "மொழி",
     short: "சிறியது", medium: "நடுத்தரம்", long: "நீளமானது", promptPlaceholder: "ஒவ்வொரு சிறந்த கதையும் ஒரு எண்ணத்தில் தொடங்குகிறது. உங்களுடையது என்ன?",
     keyboardTip: "விசைப்பலகை குறிப்பு:", press: "அழுத்தவும்", toGenerate: "உருவாக்க", alsoWorks: "இதுவும் செயல்படும்", forNewLine: "புதிய வரிக்கு",
     generating: "உருவாக்குகிறது...", generate: "உருவாக்கு", examples: "சில எடுத்துக்காட்டு குறிப்புகள்:",
-    selectPrompt: "ஒரு குறிப்பை தேர்வு செய்க", characterLimit: "எழுத்து வரம்பு அடைந்தது - உருவாக்கம் முடக்கப்பட்டது", charactersRemaining: "எழுத்துகள் மீதம்",
+    selectPrompt: "ஒரு குறிப்பை தேர்வு செய்க", characterLimit: "எழுத்து வரம்பு அடைந்தது - உருவாக்கம் முடக்கப்பட்டது", charactersRemaining: "எழுத்துக்கள் மீதம்",
     shortcuts: "விசைப்பலகை குறுக்குவழிகள்", openHelp: "உதவி திற", closeHelp: "உதவி மூடு", focusPrompt: "குறிப்பில் கவனம்",
     generateStory: "கதை உருவாக்கு", publishStory: "கதை வெளியிடு", close: "மூடு", freeLimitReached: "இலவச வரம்பு அடைந்தது",
-    freeLimitMessage: "3 இலவச கதை உருவாக்கங்களையும் பயன்படுத்திவிட்டீர்கள். தொடர உள்நுழையவும்.", continueBrowsing: "தொடர்ந்து பார்வையிடு", recentPrompts: "சமீபத்திய குறிப்புகள்", usePrompt: "பயன்படுத்து", delete: "நீக்கு", clearAll: "அனைத்தையும் நீக்கு", noRecentPrompts: "சமீபத்திய குறிப்புகள் இல்லை",
+    freeLimitMessage: "3 இலவச கதை உருவாக்கங்களையும் பயன்படுத்திவிட்டீர்கள். தொடர உள்நுழையவும்.", continueBrowsing: "தொடர்ந்து பார்வையிடவும்", recentPrompts: "சமீபத்திய குறிப்புகள்", usePrompt: "பயன்படுத்து", delete: "நீக்கு", clearAll: "அனைத்தையும் நீக்கு", noRecentPrompts: "சமீபத்திய குறிப்புகள் இல்லை",
   },
   Telugu: {
     back: "వెనుకకు", freeAccess: "3 అభ్యర్థనలకు ఉచిత ప్రవేశం", login: "లాగిన్", forMore: "చేసి మరిన్ని పొందండి!",
-    perMonth: "నెలకు", upgrade: "అప్‌గ్రేడ్", monthlyRequests: "ఈ నెల అభ్యర్థనలు", totalPosts: "మొత్తం పోస్టులు",
+    perMonth: "నెలకు", upgrade: "అప్గ్రేడ్", monthlyRequests: "ఈ నెల అభ్యర్థనలు", totalPosts: "మొత్తం పోస్టులు",
     titleStart: "మీ ఆలోచనలను", titleAccent: "అద్భుత కథలుగా మార్చండి!", length: "పొడవు", language: "భాష",
     short: "చిన్నది", medium: "మధ్యస్థం", long: "పొడవైనది", promptPlaceholder: "ప్రతి గొప్ప కథ ఒక ఆలోచనతో మొదలవుతుంది. మీది ఏమిటి?",
     keyboardTip: "కీబోర్డ్ చిట్కా:", press: "నొక్కండి", toGenerate: "రూపొందించడానికి", alsoWorks: "కూడా పనిచేస్తుంది", forNewLine: "కొత్త లైన్ కోసం",
-    generating: "రూపొందిస్తోంది...", generate: "రూపొందించు", examples: "కొన్ని ఉదాహरण ప్రాంప్ట్‌లు:",
+    generating: "రూపొందిస్తోంది...", generate: "రూపొందించు", examples: "కొన్ని ఉదాహరణ ప్రాంప్ట్‌లు:",
     selectPrompt: "ప్రాంప్ట్ ఎంచుకోండి", characterLimit: "అక్షర పరిమితి చేరింది - రూపొందింపు నిలిపివేయబడింది", charactersRemaining: "అక్షరాలు మిగిలాయి",
-    shortcuts: "キーボードショートカット", openHelp: "సహాయం తెరవండి", closeHelp: "సహాయం మూసివేయండి", focusPrompt: "ప్రాంप्ట్‌పై దృష్టి",
+    shortcuts: "కీబోర్ड షార్ట్‌కట్‌లు", openHelp: "సహాయం తెరవండి", closeHelp: "సహాయం మూసివేయండి", focusPrompt: "ప్రాంప్ట్‌పై దృష్టి",
     generateStory: "కథ రూపొందించు", publishStory: "కథ ప్రచురించు", close: "మూసివేయి", freeLimitReached: "ఉచిత పరిమితి చేరింది",
-    freeLimitMessage: "మీరు 3 ఉచిత కథా రూపొందింపులను ఉపయోగించారు. కొనసాగడానికి లాగిన్ చేయండి.", continueBrowsing: "బ్రౌజింగ్ కొనసాగించు", recentPrompts: "ఇటీవల ప్రాంప్ట్‌లు", usePrompt: "ఉపయోగించు", delete: "తొలగించు", clearAll: "అన్నింటిని తొలగించు", noRecentPrompts: "ఇటీవల ప్రాంప్ట్‌లు లేవు",
+    freeLimitMessage: "మీరు 3 ఉచిత కథా రూపొందింపులను ఉపయోగించారు. కొనసాగడానికి లాగిన్ చేయండి.", continueBrowsing: "బ్రౌజింగ్ కొనసాగించు", recentPrompts: "ఇటీవల ప్రాంప్ట్‌లు", usePrompt: "ఉపయోగించు", delete: "తొలగించు", clearAll: "అన్నింటిని తొలగించు", noRecentPrompts: "ఇటీవల ప్రాंప్ట్‌లు లేవు",
   },
   Marathi: {
     back: "मागे", freeAccess: "3 विनंत्यांसाठी मोफत प्रवेश", login: "लॉग इन", forMore: "करून अधिक मिळवा!",
@@ -302,11 +298,11 @@ const UI_TEXT: Record<string, UiText> = {
     titleStart: "तुमच्या कल्पना बदला", titleAccent: "अद्भुत कथांमध्ये!", length: "लांबी", language: "भाषा",
     short: "लहान", medium: "मध्यम", long: "लांब", promptPlaceholder: "प्रत्येक महान कथा एका कल्पनेपासून सुरू होते. तुमची कल्पना काय आहे?",
     keyboardTip: "कीबोर्ड सूचना:", press: "दाबा", toGenerate: "तयार करण्यासाठी", alsoWorks: "हेही चालते", forNewLine: "नवीन ओळीसाठी",
-    generating: "तयार होत आहे...", generate: "तयार करा", examples: "काही Rooms/उदाहरण प्रॉम्प्ट:",
+    generating: "तयार होत आहे...", generate: "तयार करा", examples: "काही उदाहरण प्रॉम्प्ट:",
     selectPrompt: "प्रॉम्प्ट निवडा", characterLimit: "अक्षर मर्यादा पूर्ण - निर्मिती बंद आहे", charactersRemaining: "अक्षरे बाकी",
     shortcuts: "कीबोर्ड शॉर्टकट", openHelp: "मदत उघडा", closeHelp: "मदत बंद करा", focusPrompt: "प्रॉम्प्टवर लक्ष",
     generateStory: "कथा तयार करा", publishStory: "कथा प्रकाशित करा", close: "बंद करा", freeLimitReached: "मोफत मर्यादा पूर्ण",
-    freeLimitMessage: "तुम्ही सर्व 3 मोफत कथा निर्मिती वापरल्या आहेत. पुढे सुरू ठेवण्यासाठी लॉग इन करा.", continueBrowsing: "ब्राउझिंग सुरू ठेवा", recentPrompts: "अलीकडील प्रॉम्प्ट", usePrompt: "वापरा", delete: "हटवा", clearAll: "सर्व मुडून टाका", noRecentPrompts: "अलीकडील प्रॉम्प्ट नाहीत",
+    freeLimitMessage: "तुम्ही सर्व 3 मोफत कथा निर्मिती वापरल्या आहेत. पुढे सुरू ठेवण्यासाठी लॉग इन करा.", continueBrowsing: "ब्राउझिंग सुरू ठेवा", recentPrompts: "अलीकडील प्रॉम्प्ट", usePrompt: "वापरा", delete: "हटवा", clearAll: "सर्व मिळून टाका", noRecentPrompts: "अलीकडील प्रॉम्प्ट नाहीत",
   },
 };
 
@@ -339,7 +335,7 @@ const TONES = [
   },
   {
     label: "Suspenseful",
-    emoji: "😰",
+    emoji: "😨",
     activeClass: "bg-orange-500/20 text-orange-300 border-orange-500/60 shadow-orange-500/20",
     inactiveClass: "bg-white/5 text-gray-400 border-transparent hover:bg-white/10 hover:text-gray-200",
   },
@@ -358,7 +354,7 @@ interface TonePickerProps {
   onChange: (tone: ToneLabel | "") => void;
 }
 
-const TonePicker: React.FC<TonePickerProps> = ({ selected, onChange }) => {
+const TonePicker: React.FC<TonePickerProps> = React.memo(({ selected, onChange }) => {
   return (
     <div className="flex flex-wrap gap-2 mb-3">
       <span className="w-full text-xs text-gray-400 mb-1">🎭 Tone:</span>
@@ -385,6 +381,74 @@ const TonePicker: React.FC<TonePickerProps> = ({ selected, onChange }) => {
       })}
     </div>
   );
+});
+import AudioPlayer, { type AudioPlayerHandle, type NarrationPlaybackState } from "../AudioPlayer";
+import { useLocation } from "react-router-dom";
+import {
+  useGenerateAlternateEndingsMutation,
+  useGenerateFreeAlternateEndingsMutation,
+} from "../../redux/apis/ai.model.api";
+import ImageFallback from "../ImageFallback";
+import GeneratedStoryTimeline from "./GeneratedStoryTimeline";
+export interface IStories {
+  uuid: string;
+  title: string;
+  content: string;
+  tag: string;
+  emotions?: string[];
+  enhancedPrompt?: string;
+  imageURL: string;
+  language?: string;
+  genre?: string;
+}
+
+interface IPost extends IStories {
+  topic: ITopicData[];
+}
+
+interface StoriesComponentProps {
+  stories: IStories[];
+  isLogin: boolean;
+  setStories: (stories: IStories[]) => void;
+  onPublishSuccess?: () => void;
+}
+
+type StorySentenceSegment = {
+  id: string;
+  text: string;
+  startWordIndex: number;
+  endWordIndex: number;
+};
+
+const buildSentenceSegments = (content: string): StorySentenceSegment[] => {
+  if (!content.trim()) {
+    return [];
+  }
+
+  const sentenceMatches = content.match(/[^.!?]+[.!?]*\s*/g) ?? [content];
+  const segments: StorySentenceSegment[] = [];
+  let wordCursor = 0;
+
+  sentenceMatches.forEach((sentence, index) => {
+    const trimmedSentence = sentence.trim();
+    if (!trimmedSentence) {
+      return;
+    }
+
+    const wordsInSentence = sentence.match(/\S+/g)?.length ?? 0;
+    const startWordIndex = wordCursor;
+    const endWordIndex =
+      wordsInSentence > 0 ? wordCursor + wordsInSentence - 1 : wordCursor;
+
+    segments.push({
+      id: `${index}-${startWordIndex}-${endWordIndex}`,
+      text: sentence,
+      startWordIndex,
+      endWordIndex,
+    });
+
+    wordCursor += wordsInSentence;
+  });
 };
 
 interface ICharacter {
@@ -394,36 +458,850 @@ interface ICharacter {
   personality: string;
 }
 
-const StoriesComponent = () => {
-  const [currentPage, setCurrentPage] = useState(1);
-  const storiesPerPage = 10;
+  return segments;
+};
+
+const StoriesViewComponent: React.FC<StoriesComponentProps> = ({
+  stories,
+  isLogin,
+  setStories,
+  isLoading,
+  onPublishSuccess,
+}) => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { register, handleSubmit, reset, setValue } = useForm<Inputs>();
+  const audioPlayerRef = useRef<AudioPlayerHandle>(null);
 
-  const draft = useMemo(() => {
-    try {
-      const saved = localStorage.getItem("story_spark_draft");
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const [stories, setStories] = useState<IStories[]>(
-    draft?.stories?.length ? getUniqueStories(draft.stories) : []
-  );
-  
+  // Start with a clean state that adapts dynamically
+  const [selectedStory, setSelectedStory] = useState<IStories | null>(null);
+  const [topics, setTopics] = useState<ITopicData[]>(topicsData);
+  const [selectTopics, setSelectTopics] = useState<ITopicData[]>([]);
+  const [newTopicTitle, setNewTopicTitle] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchFilter, setSearchFilter] = useState<string>("all");
 
+  const [selectedPrompt, setSelectedPrompt] = useState<string>("");
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [selectedGenre, setSelectedGenre] = useState<string>(
+  draft?.genre
+    ? (GENRES.find((g) => g.name === draft.genre || g.value === draft.genre)?.value ?? "ðŸ§™ Fantasy")
+    : "ðŸ§™ Fantasy",
+);
+  const [selectedLength, setSelectedLength] = useState<string>(draft?.length || "medium");
+  const [selectedTone, setSelectedTone] = useState<ToneLabel | "">(draft?.tone || "Dramatic");
+  const [textareaValue, setTextareaValue] = useState<string>(() => {
+    return location.state?.prompt || draft?.prompt || "";
+  });
+  const [selectedGenre, setSelectedGenre] = useState<string>("");
+  const [selectedLength, setSelectedLength] = useState<string>("medium");
+  const [textareaValue, setTextareaValue] = useState<string>("");
+
+  
+  const [selectedGenre, setSelectedGenre] = useState<string>(
+    draft?.genre
+      ? (GENRES.find((g) => g.name === draft.genre || g.value === draft.genre)?.value ?? "🧙 Fantasy")
+      : "🧙 Fantasy"
+  );
+  const [selectedLength, setSelectedLength] = useState<string>(draft?.length || "medium");
+  const [selectedTone, setSelectedTone] = useState<ToneLabel | "">(draft?.tone || "Dramatic");
+  const [textareaValue, setTextareaValue] = useState<string>(location.state?.prompt || draft?.prompt || "");
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(draft?.language || "English");
+  const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState<boolean>(false);
+  const [draftStatus, setDraftStatus] = useState("");
+  const DRAFT_KEY = "storyspark_story_draft_v1";
+
+  // Custom characters cast setup states:
+  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
+  const [characters, setCharacters] = useState<ICharacter[]>([]);
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const languageDropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const playSoundtrack = useCallback((genre: string) => {
+    const soundtrack = soundtrackMap[genre];
+
+    if (!soundtrack) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+  const [isCopied, setIsCopied] = useState<boolean>(false);
+  const [showWorldMap, setShowWorldMap] = useState<boolean>(false);
+const [, setShowRemix] = useState<boolean>(false);
+  const [createPost] = useCreatePostMutation();
+  const [deletePost] = useDeletePostMutation();
+  const { data: profile } = useGetProfileInfoQuery(undefined, { skip: !isLogin });
+  const lastSavedContentRef = useRef<string>("");
+  const isSavingRef = useRef<boolean>(false);
+  const hasSavedSessionRef = useRef<boolean>(false);
+  const savedPostIdRef = useRef<string | null>(null);
+  // Alternate ending state & hooks
+  const [endingsCache, setEndingsCache] = useState<{
+    [uuid: string]: { style: string; ending: string; fullStory: string }[];
+  }>({});
+  const [originalStoryContent, setOriginalStoryContent] = useState<{
+    [uuid: string]: string;
+  }>({});
+  const [isGeneratingEndings, setIsGeneratingEndings] = useState<boolean>(false);
+  const [activeEndingTab, setActiveEndingTab] = useState<string>("Happy Ending");
+  const [narrationWordIndex, setNarrationWordIndex] = useState<number>(0);
+  const [narrationState, setNarrationState] = useState<NarrationPlaybackState>("idle");
+
+  const [generateAlternateEndings] = useGenerateAlternateEndingsMutation();
+  const [generateFreeAlternateEndings] = useGenerateFreeAlternateEndingsMutation();
+
+  useEffect(() => {
+    if (selectedStory && !originalStoryContent[selectedStory.uuid]) {
+      setOriginalStoryContent((prev) => ({
+        ...prev,
+        [selectedStory.uuid]: selectedStory.content,
+      }));
+    }
+  }, [selectedStory, originalStoryContent]);
+
+  useEffect(() => {
+    if (narrationState === "playing") {
+      const activeWordElement = document.querySelector('[data-active-word="true"]');
+      if (activeWordElement) {
+        activeWordElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "nearest"
+        });
+      }
+    }
+  }, [narrationWordIndex, narrationState]);
+
+  const handleGenerateAlternateEndings = async () => {
+    if (!selectedStory) return;
+    setIsGeneratingEndings(true);
+    const toastId = toast.loading("Generating alternate endings...");
+    try {
+      const payload = {
+        title: selectedStory.title,
+        content: originalStoryContent[selectedStory.uuid] || selectedStory.content,
+        tag: selectedStory.tag,
+
+        language: selectedStory.language || "English",
+
+      };
+      
+      const generationRequest = isLogin
+        ? generateAlternateEndings(payload)
+        : generateFreeAlternateEndings(payload);
+        
+      const res = await generationRequest.unwrap();
+      if (res && res.data) {
+        setEndingsCache((prev) => ({
+          ...prev,
+          [selectedStory.uuid]: res.data,
+        }));
+        toast.success("Alternate endings generated successfully!");
+      } else {
+        toast.error("Failed to generate alternate endings.");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to generate alternate endings. Please try again.");
+    } finally {
+      toast.dismiss(toastId);
+      setIsGeneratingEndings(false);
+    }
+  };
+
+  const handleApplyEnding = (endingData: { style: string; ending: string; fullStory: string }) => {
+    if (!selectedStory) return;
+    const updatedStory = {
+      ...selectedStory,
+      content: endingData.fullStory,
+    };
+    setSelectedStory(updatedStory);
+    setStories(
+      stories.map((s) => (s.uuid === selectedStory.uuid ? updatedStory : s))
+    );
+    toast.success(`${endingData.style} applied to story!`);
+  };
+
+  const handleResetEnding = () => {
+    if (!selectedStory) return;
+    const originalContent = originalStoryContent[selectedStory.uuid];
+    if (!originalContent) return;
+    const updatedStory = {
+      ...selectedStory,
+      content: originalContent,
+    };
+    setSelectedStory(updatedStory);
+    setStories(
+      stories.map((s) => (s.uuid === selectedStory.uuid ? updatedStory : s))
+    );
+    toast.success("Reverted to original story ending!");
+  };
+
+  const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
+  const [isPausedAudio, setIsPausedAudio] = useState<boolean>(false);
+
+  // Autosave Draft
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const draftData = {
+        prompt: textareaValue,
+        genre: selectedGenre,
+        length: selectedLength,
+        language: selectedLanguage,
+        tone: selectedTone,
+      };
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "QuotaExceededError") {
+          toast.error("Couldn't autosave draft — storage limit reached.");
+        }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleTextToSpeech = () => {
+    if (!selectedStory?.content) return;
+
+    if (!("speechSynthesis" in window)) {
+      toast.error("Text-to-speech is not supported in this browser.");
+      return;
+    }
+
+    if (isPlayingAudio) {
+      if (isPausedAudio) {
+        window.speechSynthesis.resume();
+        setIsPausedAudio(false);
+        toast.success("Resumed reading story");
+      } else {
+        window.speechSynthesis.pause();
+        setIsPausedAudio(true);
+        toast.success("Paused reading story");
+      }
+    } else {
+      window.speechSynthesis.cancel();
+      const cleanContent = selectedStory.content.replace(/<[^>]*>/g, "");
+      const utterance = new SpeechSynthesisUtterance(cleanContent);
+      
+      utterance.onend = () => {
+        setIsPlayingAudio(false);
+        setIsPausedAudio(false);
+      };
+
+      utterance.onerror = (e) => {
+        console.error("SpeechSynthesis error:", e);
+        setIsPlayingAudio(false);
+        setIsPausedAudio(false);
+      };
+
+      const voices = window.speechSynthesis.getVoices();
+      const englishVoice = voices.find(
+        (v) => v.lang.startsWith("en-") && v.name.includes("Google")
+      ) || voices.find((v) => v.lang.startsWith("en-"));
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+      }
+
+      window.speechSynthesis.speak(utterance);
+      setIsPlayingAudio(true);
+      setIsPausedAudio(false);
+      toast.success("Playing story audio");
+    }
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleStopAudio = () => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsPlayingAudio(false);
+    setIsPausedAudio(false);
+    toast.success("Stopped audio playback");
+  };
+
+  useEffect(() => {
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setSelectTopics(topics.filter((topic) => topic.selected));
+  }, [topics]);
+
   const debouncedSearchQuery = useDebounce(searchQuery, 350);
+  const debouncedPrompt = useDebounce(textareaValue, 500);
+
+  useEffect(() => {
+    setValue("prompt", debouncedPrompt);
+  }, [debouncedPrompt, setValue]);
+    setNarrationWordIndex(0);
+    setNarrationState("idle");
+  }, [selectedStory?.uuid]);
+
+  const sentenceSegments = useMemo(() => {
+    return buildSentenceSegments(selectedStory?.content ?? "");
+  }, [selectedStory?.content]);
+
+  // Sync state instantly whenever a new template is submitted or selected
+  useEffect(() => {
+    if (stories && stories.length > 0) {
+      setSelectedStory(stories[0]);
+    } else {
+      setSelectedStory(null);
+    }
+    // Reset auto-save status for new story session
+    lastSavedContentRef.current = "";
+    hasSavedSessionRef.current = false;
+    savedPostIdRef.current = null;
+  }, [stories]);
+
+  useEffect(() => {
+    const autoSaveStory = async () => {
+      // 1. Prevent guest auto-save requests
+      if (!isLogin || !selectedStory) return;
+
+      // 2. Prevent duplicate auto-save requests for unchanged story content
+      if (selectedStory.content === lastSavedContentRef.current) {
+        return;
+      }
+
+      // 3. Only one draft/post is created per story session (prevent variation/topic duplicates)
+      if (hasSavedSessionRef.current) {
+        return;
+      }
+
+      // 4. Prevent duplicate network calls while a save is already running
+      if (isSavingRef.current) return;
+
+      isSavingRef.current = true;
+
+      const post: IPost = {
+        ...selectedStory,
+        topic: selectTopics,
+      };
+
+      try {
+        const result = await createPost(post).unwrap();
+        if (result && result.data && result.data._id) {
+          savedPostIdRef.current = result.data._id;
+        }
+        lastSavedContentRef.current = selectedStory.content;
+        hasSavedSessionRef.current = true;
+        toast.success("Story auto-saved!");
+      } catch (error) {
+        console.error("Auto-save failed", error);
+      } finally {
+        isSavingRef.current = false;
+      }
+    };
+
+    // Debounce to prevent multiple immediate renders/rerenders from triggering save
+    const timer = setTimeout(() => {
+      autoSaveStory();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [selectedStory, selectedStory?.content, isLogin, selectTopics, createPost]);
+
+  const handelStorySelection = (story: IStories) => {
+    setSelectedStory(story);
+  };
+
+  const handleTopicClick = (index: number) => {
+    setTopics((currentTopics) =>
+      currentTopics.map((topic, topicIndex) =>
+        topicIndex === index
+          ? { ...topic, selected: !topic.selected }
+          : topic
+      )
+    );
+  };
+  const handleAddTopic = () => {
+    const title = newTopicTitle.trim();
+
+  const [generateModel] = useGenerateModelMutation();
+  const [generateFreeModel] = useGenerateFreeModelMutation();
+  const { data } = useGetProfileInfoQuery(undefined);
+  const userRole = getUserInfo();
+  const login = isLoggedIn();
+
+  const onSubmit: SubmitHandler<Inputs> = useCallback(async (data) => {
+    if (isGenerationInProgressRef.current) {
+    if (!title) {
+      toast.error("Please enter a topic.");
+      return;
+    }
+
+    const normalizedTitle = title.startsWith("#") ? title : `#${title}`;
+    const topicExists = topics.some(
+      (topic) => topic.title.toLowerCase() === normalizedTitle.toLowerCase()
+    );
+
+    if (topicExists) {
+      toast.error("This topic already exists.");
+      return;
+    }
+
+    setTopics((currentTopics) => [
+      ...currentTopics,
+      {
+        title: normalizedTitle,
+        className: SELECTED_TOPIC_CLASSES,
+        color: SELECTED_TOPIC_CLASSES,
+        selected: true,
+      },
+    ]);
+    setNewTopicTitle("");
+  };
+
+  const handleRemoveTopic = (index: number) => {
+    if (topics.length <= 2) {
+      toast.error("At least 2 topics are required.");
+      return;
+    }
+
+    setTopics((currentTopics) =>
+      currentTopics.filter((_, topicIndex) => topicIndex !== index)
+    );
+  };
+  const handleCopyStory = async () => {
+    if (selectedStory?.content) {
+      await navigator.clipboard.writeText(selectedStory.content);
+      setIsCopied(true);
+      toast.success("Story copied!");
+      setTimeout(() => setIsCopied(false), 2000);
+    }
+  };
+
+    if (getWordCount(data.prompt) < 10) {
+      toast.error("Please enter a prompt with at least 10 words to generate a story.");
+      toast.error(
+        "Please enter a prompt with at least 10 words to generate a story."
+      );
+      return;
+    }
+  const handleExportPDF = async () => {
+    if (!selectedStory) { toast.error("No story available to export."); return; }
+    if (!selectedStory.content?.trim()) {toast.error("Story content is empty. Cannot export.");return;}
+    const toastId = toast.loading("Preparing your premium PDF...");
+
+    try {
+      // Helper to load image assets asynchronously with a safe timeout
+      const loadImageWithTimeout = (src: string, timeoutMs: number = 3000): Promise<HTMLImageElement> => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          const timeout = setTimeout(() => {
+            img.src = ""; // stop loading
+            reject(new Error(`Timeout loading image: ${src}`));
+          }, timeoutMs);
+
+          img.onload = () => {
+            clearTimeout(timeout);
+            resolve(img);
+          };
+          img.onerror = (e) => {
+            clearTimeout(timeout);
+            reject(e);
+          };
+          img.src = src;
+        });
+      };
+
+      let logoImg: HTMLImageElement | null = null;
+      let storyImg: HTMLImageElement | null = null;
+
+      try {
+        logoImg = await loadImageWithTimeout(logo);
+      } catch (err) {
+        console.warn("Failed to load StorySparkAI logo for PDF", err);
+      }
+
+      if (selectedStory.imageURL) {
+        try {
+          storyImg = await loadImageWithTimeout(selectedStory.imageURL);
+        } catch (err) {
+          console.warn("Failed to load story banner image for PDF", err);
+        }
+      }
+
+      // Initialize A4 PDF document (210mm x 297mm)
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const title = selectedStory.title || "Untitled Story";
+      const content = selectedStory.content || "";
+      const tag = (selectedStory.tag || "STORY").toUpperCase();
+
+      const leftMargin = 20;
+      const rightMargin = 20;
+      const topMargin = 20;
+      const bottomMargin = 20;
+      const printableWidth = 210 - leftMargin - rightMargin; // 170 mm
+      const maxY = 297 - bottomMargin - 10; // Bottom boundary (267mm) leaving room for footer
+
+      let yCursor = topMargin;
+
+      // 1. Header (Logo & Sub-header)
+      if (logoImg) {
+        const logoHeight = 8;
+        const logoWidth = (logoImg.width / logoImg.height) * logoHeight;
+        doc.addImage(logoImg, "PNG", leftMargin, yCursor, logoWidth, logoHeight);
+      } else {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.setTextColor(99, 102, 241); // Brand Indigo
+        doc.text("StorySparkAI", leftMargin, yCursor + 6);
+      }
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text("PREMIUM AI GENERATED STORY", 190, yCursor + 5, { align: "right" });
+
+      yCursor += 10;
+
+    try {
+      timeoutId = setTimeout(() => {
+        if (isGenerationInProgressRef.current) {
+          toast.error("Story generation timed out. Please try again.");
+          handleCancelGeneration(true);
+        }
+      }, 60000);
+      // Header Divider Line
+      doc.setDrawColor(99, 102, 241); // Brand Indigo
+      doc.setLineWidth(0.5);
+      doc.line(leftMargin, yCursor, 190, yCursor);
+
+      yCursor += 8;
+
+      const payload = {
+        prompt: selectedGenre ? `[Genre: ${selectedGenre}] ${data.prompt}` : data.prompt,
+        wordLength: selectedLength === "short" ? 175 : selectedLength === "long" ? 800 : 450,
+        prompt: selectedGenre
+          ? `[Genre: ${selectedGenre}] ${data.prompt}`
+          : data.prompt,
+        wordLength:
+          selectedLength === "short"
+            ? 175
+            : selectedLength === "long"
+            ? 800
+            : 450,
+        language: selectedLanguage,
+        tone: selectedTone || undefined,
+        characters: characters.map(({ name, role, personality }) => ({ name, role, personality })),
+      };
+
+      const generationRequest = login ? generateModel(payload) : generateFreeModel(payload);
+      const generationRequest = login
+        ? generateModel(payload)
+        : generateFreeModel(payload);
+      activeGenerationRef.current = generationRequest;
+      const res = await generationRequest.unwrap();
+      if (res) {
+        toast.success(res.message);
+        addPrompt(data.prompt);
+        setStories(getUniqueStories(res.data as IStories[]));
+        setTextareaValue("");
+        setSelectedPrompt("");
+        setValue("prompt", "");
+        // Clear draft after successful generation
+        localStorage.removeItem(DRAFT_KEY);
+        setDraftStatus("");
+        reset();
+        setCharacters([]);
+        setCurrentStep(1);
+        if (selectedGenre) {
+          playSoundtrack(selectedGenre);
+      // 2. Story Banner Image (only on Page 1)
+      if (storyImg) {
+        const bannerHeight = 55;
+        doc.addImage(storyImg, "JPEG", leftMargin, yCursor, printableWidth, bannerHeight);
+        yCursor += bannerHeight + 8;
+      }
+
+      // 3. Story Title
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.setTextColor(30, 41, 59); // Slate 800
+      const splitTitle = doc.splitTextToSize(title, printableWidth);
+      splitTitle.forEach((line: string) => {
+        doc.text(line, leftMargin, yCursor);
+        yCursor += 9;
+      });
+
+      yCursor += 1;
+
+      // 4. Meta Row (Generated Date & Genre Pill Badge)
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139); // Slate 500
+      const formattedDate = new Date().toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      doc.text(`Generated on ${formattedDate}`, leftMargin, yCursor);
+
+      // Genre pill badge on the right
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      const tagWidth = doc.getTextWidth(tag);
+      const chipWidth = tagWidth + 5;
+      const chipHeight = 5;
+      const chipX = 190 - chipWidth;
+      const chipY = yCursor - 3.8;
+
+      doc.setFillColor(99, 102, 241); // Brand Indigo background
+      doc.roundedRect(chipX, chipY, chipWidth, chipHeight, 1, 1, "F");
+
+      doc.setTextColor(255, 255, 255); // White text inside pill
+      doc.text(tag, chipX + 2.5, chipY + 3.5);
+
+      yCursor += 4.5;
+
+      // Meta row bottom line
+      doc.setDrawColor(226, 232, 240); // Slate 200
+      doc.setLineWidth(0.2);
+      doc.line(leftMargin, yCursor, 190, yCursor);
+
+      yCursor += 10;
+
+      // 5. Story Paragraphs Flowing
+      const paragraphs = content.split(/\n+/);
+      const lineHeight = 6.5;
+      const paragraphSpacing = 4.5;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(30, 41, 59); // Slate 800
+
+      paragraphs.forEach((para: string, pIdx: number) => {
+        const cleanPara = para.trim();
+        if (!cleanPara) return;
+
+        const lines = doc.splitTextToSize(cleanPara, printableWidth);
+        lines.forEach((line: string) => {
+          if (yCursor > maxY) {
+            doc.addPage();
+            yCursor = 30; // Top padding for subsequent pages
+          }
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(11);
+          doc.setTextColor(30, 41, 59); // Slate 800
+          doc.text(line, leftMargin, yCursor);
+          yCursor += lineHeight;
+        });
+
+        if (pIdx < paragraphs.length - 1) {
+          yCursor += paragraphSpacing;
+        }
+      });
+
+      // 6. Running Header and Footer generation
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+
+        // Footer line
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.25);
+        doc.line(leftMargin, 280, 190, 280);
+
+        // Footer Text
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139); // Slate 500
+        doc.text("Generated with StorySparkAI", leftMargin, 285);
+        doc.text(`Page ${i} of ${totalPages}`, 190, 285, { align: "right" });
+
+        // Header on pages 2+
+        if (i > 1) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8);
+          doc.setTextColor(99, 102, 241); // Brand Indigo
+          doc.text("StorySparkAI", leftMargin, 14);
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(148, 163, 184); // Slate 400
+          const headerTitle = title.length > 50 ? title.substring(0, 50) + "..." : title;
+          doc.text(headerTitle, 190, 14, { align: "right" });
+
+          doc.setDrawColor(241, 245, 249);
+          doc.setLineWidth(0.2);
+          doc.line(leftMargin, 17, 190, 17);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      if (message !== "Story generation was cancelled.") {
+        toast.error(message);
+      }
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (latencyTimeoutId) {
+        clearTimeout(latencyTimeoutId);
+      }
+      activeGenerationRef.current = null;
+      isGenerationInProgressRef.current = false;
+      setLoading(false);
+      setIsHighLatency(false);
+    }
+  }, [
+    login,
+    guestRequestCount,
+    selectedGenre,
+    selectedLength,
+    selectedLanguage,
+    selectedTone,
+    generateModel,
+    generateFreeModel,
+    addPrompt,
+    setValue,
+    playSoundtrack,
+    handleCancelGeneration,
+    characters,
+    reset,
+  ]);
+
+  const isOverLimit = textareaValue.length >= MAX_PROMPT_LENGTH;
+  const isDangerLimit = textareaValue.length >= MAX_PROMPT_LENGTH * DANGER_THRESHOLD;
+  const isNearLimit = textareaValue.length >= MAX_PROMPT_LENGTH * WARN_THRESHOLD && !isDangerLimit;
+
+  const isGenerateDisabled = loading || isOverLimit || !textareaValue.trim();
+
+  const handleOpenHelp = useCallback(() => setShowHelpModal(true), []);
+  const handleCloseHelp = useCallback(() => setShowHelpModal(false), []);
+  const handleGenerateShortcut = useCallback(() => {
+    if (isGenerateDisabled) {
+      return;
+    }
+    if (inputRef.current) {
+      const form = inputRef.current.closest("form");
+      if (form) form.requestSubmit();
+    }
+  }, [isGenerateDisabled]);
+
+  const handlePublishShortcut = useCallback(() => {
+    const publishBtn = document.getElementById("publish-story-btn");
+    publishBtn?.click();
+  }, []);
+
+  const handleFocusPrompt = useCallback(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const generateId = () => Math.random().toString(36).substring(2, 9);
+      }
+
+      // Save PDF with sanitized name
+      const safeTitle = title.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+      doc.save(`${safeTitle}.pdf`);
+      toast.dismiss(toastId);
+      toast.success("Premium PDF downloaded!");
+    } catch (error) {
+      console.error(error);
+      toast.dismiss(toastId);
+      toast.error("Failed to export PDF.");
+    }
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+const getSafeFileName = (title: string, ext: string) => {
+  const cleanTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `${cleanTitle || "story"}.${ext}`;
+};
+
+const handleExportMarkdown = () => {
+    if (!selectedStory) { toast.error("No story available to export."); return; }
+    if (!selectedStory.content?.trim()) {toast.error("Story content is empty. Cannot export.");return;}
+    try {
+      const title = selectedStory.title || "Story";
+      const content = selectedStory.content || "";
+      const tag = selectedStory.tag || "General";
+      const authorName = isLogin && profile?.name ? profile.name : "Anonymous";
+      const isoDate = new Date().toISOString().split("T")[0];
+      const markdownContent = `---\ntitle: "${title.replace(/"/g, '\\"')}"\ntag: "${tag.replace(/"/g, '\\"')}"\nauthor: "${authorName.replace(/"/g, '\\"')}"\ndate: "${isoDate}"\n---\n\n# ${title}\n\n${content}\n`;
+      const blob = new Blob([markdownContent], { type: "text/markdown;charset=utf-8;" });
+      downloadBlob(blob, getSafeFileName(title, "md"));
+      toast.success("Markdown downloaded!");
+    } catch (error) { console.error(error); toast.error("Failed to export Markdown."); }
+  };
+
+  const handelPublishStory = async () => {
+    if (!isLogin) {
+      toast.error("Please login to publish the story.");
+      return;
+    }
+    if (!selectedStory) {
+      toast.error("No story available. Please generate a story first.");
+      return;
+    }
+    if (selectTopics.length < 2) {
+      toast.error("Please select at least 2 topics.");
+      return;
+    }
+    const post: IPost = {
+      ...selectedStory,
+      topic: selectTopics,
+    };
+    setLoading(true);
+    try {
+      if (savedPostIdRef.current) {
+        try {
+          await deletePost(savedPostIdRef.current).unwrap();
+        } catch (deleteError) {
+          console.warn("Failed to delete auto-saved draft before publishing:", deleteError);
+        }
+      }
+      const result = await createPost(post).unwrap();
+      if (result) {
+        toast.success("Story published successfully!");
+        setStories([]);
+        setSelectedStory(null);
+        onPublishSuccess?.();
+      }
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateReadingTime = (content: string): number => {
+    const words = getWordCount(content);
+    return Math.max(1, Math.ceil(words / 200));
+  };
+
+  const isNarrationActive = narrationState !== "idle";
+
+
+  const uniqueStories = useMemo(() => getUniqueStories(stories), [stories]);
 
   const filteredStories = useMemo(() => {
-    if (!debouncedSearchQuery.trim()) return stories;
+    if (!debouncedSearchQuery.trim()) return uniqueStories;
     const query = debouncedSearchQuery.toLowerCase();
-    return stories.filter((story) => {
+    
+    return uniqueStories.filter((story) => {
       switch (searchFilter) {
         case "title":
           return story.title?.toLowerCase().includes(query);
@@ -440,391 +1318,93 @@ const StoriesComponent = () => {
           );
       }
     });
-  }, [stories, debouncedSearchQuery, searchFilter]);
+  }, [uniqueStories, debouncedSearchQuery, searchFilter]);
 
   const indexOfLastStory = currentPage * storiesPerPage;
   const indexOfFirstStory = indexOfLastStory - storiesPerPage;
-  const currentStories = filteredStories.slice(indexOfFirstStory, indexOfLastStory);
-  const totalPages = Math.ceil(filteredStories.length / storiesPerPage);
+  const currentStories = useMemo(() => {
+    return filteredStories.slice(indexOfFirstStory, indexOfLastStory);
+  }, [filteredStories, indexOfFirstStory, indexOfLastStory]);
+
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredStories.length / storiesPerPage);
+  }, [filteredStories.length, storiesPerPage]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearchQuery, searchFilter]);
 
-  const { data } = useGetProfileInfoQuery(undefined);
-  const userRole = getUserInfo();
-  const login = isLoggedIn();
-  const [generateModel] = useGenerateModelMutation();
-  const [generateFreeModel] = useGenerateFreeModelMutation();
-  const [selectedPrompt, setSelectedPrompt] = useState<string>("");
-  const [showHelpModal, setShowHelpModal] = useState(false);
-  
-  const [selectedGenre, setSelectedGenre] = useState<string>(
-    draft?.genre
-      ? (GENRES.find((g) => g.name === draft.genre || g.value === draft.genre)?.value ?? "🧙 Fantasy")
-      : "🧙 Fantasy"
+if (isLoading) {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <StoryGeneratingAnimation />
+    </div>
   );
-  const [selectedLength, setSelectedLength] = useState<string>(draft?.length || "medium");
-  const [selectedTone, setSelectedTone] = useState<ToneLabel | "">(draft?.tone || "Dramatic");
-  const [textareaValue, setTextareaValue] = useState<string>(location.state?.prompt || draft?.prompt || "");
-  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<string>(draft?.language || "English");
-  const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState<boolean>(false);
-  
-  // Custom characters cast setup states:
-  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
-  const [characters, setCharacters] = useState<ICharacter[]>([]);
-
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const languageDropdownRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const activeGenerationRef = useRef<{ abort: () => void } | null>(null);
-  const isGenerationInProgressRef = useRef(false);
-  
-  const [guestRequestCount, setGuestRequestCount] = useState<number>(() =>
-    parseInt(localStorage.getItem("guestRequestCount") || "0", 10)
-  );
-  const [showLimitModal, setShowLimitModal] = useState<boolean>(false);
-  const [isRecentPromptsOpen, setIsRecentPromptsOpen] = useState<boolean>(false);
-  const { recentPrompts, addPrompt, removePrompt, clearAll } = useRecentPrompts();
-  
-  const text = UI_TEXT[selectedLanguage] ?? UI_TEXT.English;
-  const genreLabels = GENRE_LABELS[selectedLanguage] ?? GENRE_LABELS.English;
-
-  const playSoundtrack = (genre: string) => {
-    const soundtrack = soundtrackMap[genre];
-    if (!soundtrack) return;
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-
-    const audio = new Audio(soundtrack);
-    audio.loop = true;
-    audio.volume = 0.3;
-    audio.play().catch((err) => {
-      console.log("Audio playback failed:", err);
-    });
-    audioRef.current = audio;
-  };
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const draftData = {
-        prompt: textareaValue,
-        genre: selectedGenre,
-        length: selectedLength,
-        language: selectedLanguage,
-        tone: selectedTone,
-        stories: stories,
-      };
-      try {
-        localStorage.setItem("story_spark_draft", JSON.stringify(draftData));
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "QuotaExceededError") {
-          toast.error("Couldn't autosave draft — storage limit reached.");
-        }
-      }
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [textareaValue, selectedGenre, selectedLength, selectedLanguage, selectedTone, stories]);
-
-  useEffect(() => {
-    const selectedLocale = LANGUAGES.find((language) => language.name === selectedLanguage)?.code ?? "en";
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, selectedLanguage);
-    document.documentElement.lang = selectedLocale;
-  }, [selectedLanguage]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-      if (languageDropdownRef.current && !languageDropdownRef.current.contains(event.target as Node)) {
-        setIsLanguageDropdownOpen(false);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsDropdownOpen(false);
-        setIsLanguageDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (location.state) {
-      if (location.state.prompt) {
-        setTextareaValue(location.state.prompt);
-      }
-      if (location.state.genre) {
-        const matchedGenre = GENRES.find((g) => g.name === location.state.genre)?.value ?? "";
-        setSelectedGenre(matchedGenre);
-      }
-      navigate(location.pathname, {
-        replace: true,
-        state: {},
-      });
-    }
-  }, [location, navigate, setSelectedGenre, setTextareaValue]);
-
-  useEffect(() => {
-    setValue("prompt", textareaValue);
-  }, [textareaValue, setValue]);
-
-  useEffect(() => {
-    return () => {
-      activeGenerationRef.current?.abort();
-    };
-  }, []);
-
-  const onSubmit: SubmitHandler<Inputs> = async (data) => {
-    if (isGenerationInProgressRef.current) return;
-
-    if (!login && guestRequestCount >= 3) {
-      setShowLimitModal(true);
-      return;
-    }
-
-    if (!data.prompt.trim()) {
-      toast.error("Please enter a prompt to generate a story.");
-      return;
-    }
-
-    if (getWordCount(data.prompt) < 10) {
-      toast.error("Please enter a prompt with at least 10 words to generate a story.");
-      return;
-    }
-
-    // Validate characters array
-    for (const char of characters) {
-      if (!char.name.trim()) {
-        toast.error("Please provide a name for all characters.");
-        return;
-      }
-      if (!char.role.trim()) {
-        toast.error("Please select a role for all characters.");
-        return;
-      }
-      if (!char.personality.trim()) {
-        toast.error("Please describe the personality/traits for all characters.");
-        return;
-      }
-    }
-
-    isGenerationInProgressRef.current = true;
-    setLoading(true);
-
-    let timeoutId: NodeJS.Timeout | null = null;
-
-    try {
-      timeoutId = setTimeout(() => {
-        if (isGenerationInProgressRef.current) {
-          toast.error("Story generation timed out. Please try again.");
-          handleCancelGeneration(true);
-        }
-      }, 55000);
-
-      const payload = {
-        prompt: selectedGenre ? `[Genre: ${selectedGenre}] ${data.prompt}` : data.prompt,
-        wordLength: selectedLength === "short" ? 175 : selectedLength === "long" ? 800 : 450,
-        language: selectedLanguage,
-        tone: selectedTone || undefined,
-        characters: characters.map(({ name, role, personality }) => ({ name, role, personality })),
-      };
-
-      const generationRequest = login ? generateModel(payload) : generateFreeModel(payload);
-      activeGenerationRef.current = generationRequest;
-      const res = await generationRequest.unwrap();
-      
-      if (res) {
-        toast.success(res.message);
-        addPrompt(data.prompt);
-        setStories(res.data as IStories[]);
-        setTextareaValue("");
-        setSelectedPrompt("");
-        setValue("prompt", "");
-        setCharacters([]);
-        setCurrentStep(1);
-        if (selectedGenre) {
-          playSoundtrack(selectedGenre);
-        }
-        if (!login) {
-          const newCount = guestRequestCount + 1;
-          setGuestRequestCount(newCount);
-          localStorage.setItem("guestRequestCount", String(newCount));
-        }
-        // Scroll back to top after story generation
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      if (message !== "Story generation was cancelled.") {
-        toast.error(message);
-      }
-    } finally {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      activeGenerationRef.current = null;
-      isGenerationInProgressRef.current = false;
-      setLoading(false);
-    }
-  };
-
-  const handleCancelGeneration = (isTimeout = false) => {
-    activeGenerationRef.current?.abort();
-    activeGenerationRef.current = null;
-    isGenerationInProgressRef.current = false;
-    setLoading(false);
-    if (!isTimeout) {
-      toast("Story generation cancelled.");
-    }
-  };
-
-  const handleClearPrompt = () => {
-    setTextareaValue("");
-    setSelectedPrompt("");
-    setValue("prompt", "");
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
-  };
-
-  const handlePublishSuccess = () => {
-    setTextareaValue("");
-    setSelectedPrompt("");
-    setValue("prompt", "");
-    setCharacters([]);
-    setCurrentStep(1);
-    reset();
-  };
-
-  const isOverLimit = textareaValue.length >= MAX_PROMPT_LENGTH;
-  const isNearLimit = textareaValue.length >= MAX_PROMPT_LENGTH * WARN_THRESHOLD;
-  const isGenerateDisabled = loading || isOverLimit || !textareaValue.trim();
-
-  const generateId = () => Math.random().toString(36).substring(2, 9);
-
-  const handleAddCharacter = () => {
-    setCharacters([
-      ...characters,
-      { id: generateId(), name: "", role: "Protagonist", personality: "" },
-    ]);
-  };
-
-  const handleCharacterChange = (id: string, field: keyof Omit<ICharacter, "id">, value: string) => {
-    setCharacters(
-      characters.map((char) => (char.id === id ? { ...char, [field]: value } : char))
-    );
-  };
-
-  const handleRemoveCharacter = (id: string) => {
-    setCharacters(characters.filter((char) => char.id !== id));
-  };
-
-  const handleNextStep = () => {
-    if (!textareaValue.trim()) {
-      toast.error("Please enter a prompt to generate a story.");
-      return;
-    }
-    if (getWordCount(textareaValue) < 10) {
-      toast.error("Please enter a prompt with at least 10 words to generate a story.");
-      return;
-    }
-    setCurrentStep(2);
-  };
-
-  useKeyboardShortcuts({
-    onOpenHelp: () => setShowHelpModal(true),
-    onCloseHelp: () => setShowHelpModal(false),
-    onGenerate: () => {
-      if (isGenerateDisabled) {
-        return;
-      }
-      if (currentStep === 1) {
-        handleNextStep();
-      } else {
-        if (inputRef.current) {
-          const form = inputRef.current.closest("form");
-          if (form) form.requestSubmit();
-        }
-      }
-    },
-    onPublish: () => {
-      const publishBtn = document.getElementById("publish-story-btn");
-      publishBtn?.click();
-    },
-    focusPrompt: () => {
-      inputRef.current?.focus();
-    },
-    hasStory: stories.length > 0,
-  });
+}
+  if (!selectedStory) {
+    return null;
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100 flex flex-col w-full box-border relative overflow-hidden">
-      <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[140px] pointer-events-none select-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/5 rounded-full blur-[140px] pointer-events-none select-none" />
-
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24 relative z-10 w-full flex-grow box-border">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-10 select-none w-full box-border">
-          <div className="w-full sm:w-auto flex justify-start">
-            <Link to="/" className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-[#111827]/40 border border-slate-200 dark:border-white/10 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:shadow-sm transition-all duration-150 active:scale-[0.98]">
-              <i className="fa-solid fa-arrow-left text-[10px]" />
-              <span>{text.back}</span>
-            </Link>
-          </div>
-
-          {!login && (
-            <div className="text-center w-full sm:w-auto">
-              <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500/5 border border-blue-500/10 text-slate-600 dark:text-slate-400 text-xs font-medium shadow-sm dark:shadow-none">
-                <span>
-                  {text.freeAccess} —{" "}
-                  <Link to="/login" className="text-blue-600 dark:text-blue-400 font-bold hover:underline">
-                    {text.login}
-                  </Link>{" "}
-                  {text.forMore}
+    <div className="mt-16 px-4 sm:px-6 lg:px-8 max-w-8xl mx-auto pb-10">
+      <style>
+        {`
+          @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .animate-fade-in-up {
+            animation: fadeInUp 0.6s ease-out forwards;
+          }
+        `}
+      </style>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in-up">
+        <div className="col-span-1 lg:col-span-8 flex flex-col">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+            <div>
+              <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-blue-400 mb-2">
+                {selectedStory?.title}
+              </h1>
+              <div className="flex flex-wrap gap-2">
+                <span className="inline-flex items-center rounded-full bg-purple-900/60 text-purple-300 border border-purple-700/50 py-1 px-3 text-xs font-semibold">
+                  Γëí╞Æ├ä┬í {selectedStory.tag}
                 </span>
+                <span className="inline-flex items-center rounded-full bg-blue-900/60 text-blue-300 border border-blue-700/50 py-1 px-3 text-xs font-semibold">
+                  Γëí╞Æ├«├ë {selectedStory.language || "English"}
+                </span>
+                {selectedStory.emotions && selectedStory.emotions.length > 0 && (
+                  <span className="inline-flex items-center rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 py-1 px-3 text-xs font-semibold">
+                    Γëí╞Æ├┐├¿ {selectedStory.emotions.join(", ")}
+                  </span>
+                )}
               </div>
             </div>
-          )}
-
-          <div className="flex flex-col items-center sm:items-end w-full sm:w-auto">
-            <div className="inline-flex items-center gap-3 px-3.5 py-2 rounded-xl bg-white dark:bg-[#111827]/40 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm dark:shadow-none">
-              <span>
-                <span className="text-slate-400 font-medium lowercase tracking-normal">{text.perMonth}:</span>{" "}
-                {getRequestLimit(userRole?.subscriptionType as string)}
-              </span>
-
-              <span className="h-3.5 w-px bg-slate-200 dark:bg-white/10" />
-              <Link to="/pricing" className="text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center gap-1.5">
-                <span>{text.upgrade}</span>
-                <i className="fas fa-bolt text-amber-400 text-[11px]" />
-              </Link>
-            </div>
-            <div className="mt-2.5 text-[11px] font-semibold tracking-wide text-slate-400 dark:text-slate-500 text-center sm:text-right uppercase space-y-0.5">
-              <div>{text.monthlyRequests}: {login ? (data?.requestsThisMonth ?? 0) : guestRequestCount}</div>
-              <div>{text.totalPosts}: {login ? (data?.postsCount ?? 0) : 0}</div>
+            <div className="flex justify-start sm:justify-end">
+              <div className="flex -space-x-5">
+                {stories && stories.length > 0 && (
+                  stories.map((story) => (
+                    <button
+                      key={story.uuid}
+                      className={`relative w-16 h-16 rounded-full border-2 ${
+                        selectedStory?.uuid === story.uuid
+                          ? "border-blue-500 scale-110"
+                          : "border-white"
+                      } hover:scale-110 transition-transform duration-200 focus:outline-none`}
+                      onClick={() => handelStorySelection(story)}
+                    >
+                      <img
+                        src={story.imageURL}
+                        alt={story.title}
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="mb-12 max-w-3xl mx-auto text-center select-none">
+        <div className="mb-12 max-w-3xl mx-auto text-center select-none mt-11">
           <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
             ✨ {text.titleStart}{" "}
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
@@ -833,74 +1413,219 @@ const StoriesComponent = () => {
             ✨
           </h1>
         </div>
+          <div className="bg-slate-800/80 backdrop-blur-xl border border-slate-700/50 p-8 rounded-2xl shadow-2xl relative overflow-hidden">
+            <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-[-50px] left-[-50px] w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <h3 className="text-xl font-bold text-slate-200 relative z-10">
+                Generated Story
+              </h3>
+              <div className="flex flex-wrap items-center gap-2 relative z-10">
+                <button
+                  type="button"
+                  className="rounded-lg px-4 py-2 bg-slate-700 text-slate-200 font-semibold cursor-pointer hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleCopyStory}
+                  disabled={!selectedStory}
+                >
+                  {isCopied ? "Γ£ô Copied" : "≡ƒôï Copy"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg px-4 py-2 bg-purple-700 text-slate-200 font-semibold cursor-pointer hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleExportPDF}
+                  disabled={!selectedStory}
+                >
+                  ≡ƒôä Export PDF
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg px-4 py-2 bg-indigo-700 text-slate-200 font-semibold cursor-pointer hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleExportMarkdown}
+                  disabled={!selectedStory}
+                >
+                  Γ¼ç∩╕Å Export as Markdown
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg px-4 py-2 bg-violet-700 text-slate-200 font-semibold cursor-pointer hover:bg-violet-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setShowWorldMap(true)}
+                  disabled={!selectedStory}
+                >
+                  Γëí╞Æ├╣ΓòæΓê⌐Γòò├à World Map
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg px-4 py-2 bg-fuchsia-700 text-slate-200 font-semibold cursor-pointer hover:bg-fuchsia-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setShowRemix(true)}
+                  disabled={!selectedStory}
+                >
+                  Γëí╞Æ├╢├ç Remix
+                </button>
+                <button
+                  type="button"
+                  id="publish-story-btn"
+                  className={`rounded-lg px-5 py-2 font-semibold flex items-center space-x-2 cursor-pointer bg-blue-600 text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    loading ? "" : "hover:bg-blue-500 hover:shadow-lg active:scale-95"
+                  }`}
+                  onClick={handelPublishStory}
+                  disabled={loading || !selectedStory}
+                >
+                  {loading ? "Publishing..." : "Publish"}
+                </button>
+              </div>
+            </div>
 
-        <div className="max-w-3xl mx-auto w-full box-border space-y-6">
-          <div className="bg-white dark:bg-[#111827]/40 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm hover:shadow-xl transition-shadow duration-300 w-full box-border">
-            <form className="space-y-6 w-full box-border" onSubmit={handleSubmit(onSubmit)}>
-              {currentStep === 1 ? (
-                <>
-                  {/* Step 1 Content */}
-                  <div className="w-full box-border select-none">
-                    <div className="flex flex-wrap gap-2">
-                      {GENRES.map((genre) => (
-                        <button
-                          key={genre.value}
-                          type="button"
-                          onClick={() => {
-                            const newGenre = selectedGenre === genre.value ? "" : genre.value;
-                            setSelectedGenre(newGenre);
-                            if (newGenre) {
-                              playSoundtrack(newGenre);
-                            } else if (audioRef.current) {
-                              audioRef.current.pause();
-                              audioRef.current.currentTime = 0;
-                            }
-                          }}
-                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold tracking-wide uppercase border transition-all duration-150 cursor-pointer active:scale-[0.97] ${
-                            selectedGenre === genre.value
-                              ? "bg-gradient-to-r from-blue-600 to-indigo-600 border-transparent text-white shadow-md shadow-blue-500/10"
-                              : "bg-slate-50 border-slate-200/60 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:border-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
-                          }`}
-                        >
-                          <span className="mr-1">{genre.icon}</span>
-                          <span>{genreLabels[genre.name]}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+            {selectedStory.enhancedPrompt && (
+              <div className="mb-6 p-4 bg-indigo-900/30 border border-indigo-700/50 rounded-xl relative z-10">
+                <h4 className="text-sm font-semibold text-indigo-300 mb-2 flex items-center gap-2">
+                  <i className="fas fa-wand-magic-sparkles"></i> AI Enhanced Prompt
+                </h4>
+                <p className="text-slate-300 text-sm italic break-words whitespace-pre-wrap">
+                  {selectedStory.enhancedPrompt}
+                </p>
+              </div>
+            )}
 
-                  {/* Tone picker row */}
-                  <div className="pt-2 border-t border-slate-100 dark:border-white/5 select-none">
-                    <TonePicker selected={selectedTone} onChange={setSelectedTone} />
-                  </div>
+            <div id="story-content" className="prose prose-invert max-w-none text-slate-300 leading-relaxed tracking-wide relative z-10">
+              <p className="break-words whitespace-pre-wrap">
+                {sentenceSegments.length > 0 ? (
+                  sentenceSegments.map((segment: StorySentenceSegment) => {
+                    const isActiveSentence =
+                      isNarrationActive &&
+                      narrationWordIndex >= segment.startWordIndex &&
+                      narrationWordIndex <= segment.endWordIndex;
 
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-slate-100 dark:border-white/5 w-full box-border select-none">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1">📏 {text.length}:</span>
-                      {(["short", "medium", "long"] as const).map((length) => (
-                        <button
-                          key={length}
-                          type="button"
-                          onClick={() => setSelectedLength(length)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wide border transition-all duration-150 cursor-pointer ${
-                            selectedLength === length
-                              ? "bg-blue-600 border-transparent text-white shadow-sm"
-                              : "bg-slate-50 border-slate-200/60 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:border-white/5 dark:text-slate-400 dark:hover:bg-white/10"
-                          }`}
-                        >
-                          {text[length]}
-                        </button>
-                      ))}
-                    </div>
+                    const rawParts = segment.text.split(/(\s+)/);
+                    let wordOffset = 0;
+
+                    return (
+                      <span
+                        key={segment.id}
+                        className={isActiveSentence ? "text-slate-100 font-medium transition-colors duration-300" : undefined}
+                      >
+                        {rawParts.map((part, partIdx) => {
+                          if (part === "") return null;
+                          if (/^\s+$/.test(part)) {
+                            return part;
+                          }
+
+                          const absoluteWordIndex = segment.startWordIndex + wordOffset;
+                          wordOffset++;
+
+                          const isActiveWord = isNarrationActive && narrationWordIndex === absoluteWordIndex;
+
+                          if (isActiveWord) {
+                            return (
+                              <span
+                                key={partIdx}
+                                className="bg-indigo-500/30 text-indigo-300 rounded px-1 transition-all duration-150 active-narrated-word"
+                                data-active-word="true"
+                              >
+                                {part}
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <span key={partIdx}>
+                              {part}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    );
+                  })
+                ) : (
+                  (() => {
+                    const rawParts = selectedStory.content.split(/(\s+)/);
+                    let wordOffset = 0;
+                    return rawParts.map((part, partIdx) => {
+                      if (part === "") return null;
+                      if (/^\s+$/.test(part)) {
+                        return part;
+                      }
+
+                      const absoluteWordIndex = wordOffset;
+                      wordOffset++;
+
+                      const isActiveWord = isNarrationActive && narrationWordIndex === absoluteWordIndex;
+
+                      if (isActiveWord) {
+                        return (
+                          <span
+                            key={partIdx}
+                            className="bg-indigo-500/30 text-indigo-300 rounded px-1 transition-all duration-150 active-narrated-word"
+                            data-active-word="true"
+                          >
+                            {part}
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <span key={partIdx}>
+                          {part}
+                        </span>
+                      );
+                    });
+                  })()
+                )}
+              </p>
+            </div>
 
                     <div className="flex items-center gap-2" ref={languageDropdownRef}>
                       <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1">🌐 {text.language}:</span>
                       <div className="relative">
+            <div className="relative z-10 mt-6">
+              <AudioPlayer
+                ref={audioPlayerRef}
+                text={selectedStory.content}
+                title={selectedStory.title}
+                onWordIndexChange={setNarrationWordIndex}
+                onPlaybackStateChange={setNarrationState}
+              />
+            </div>
+          </div>
+          <div className="mt-7">
+            <div className="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-xl p-6 mb-8">
+              <h3 className="text-lg font-bold text-slate-200 mb-4">
+                Select Topics
+              </h3>
+              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <input
+                  type="text"
+                  value={newTopicTitle}
+                  onChange={(event) => setNewTopicTitle(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleAddTopic();
+                    }
+                  }}
+                  placeholder="Add related topic"
+                  className="flex-1 rounded-lg border border-slate-600 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+                <button
+                  type="button"
+                  className="rounded-lg px-4 py-2 bg-blue-600 text-white font-semibold cursor-pointer hover:bg-blue-500 transition-colors"
+                  onClick={handleAddTopic}
+                >
+                  Add Topic
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {selectedStory ? (
+                  <>
+                    {topics.map((topic, index) => (
+                      <span
+                        key={index}
+                        className={`inline-flex items-center gap-2 px-4 py-1.5 ${topic.className} rounded-full text-sm font-medium transition-transform hover:scale-105 shadow-sm`}
+                      >
                         <button
-                          key="lang-selector-btn"
                           type="button"
-                          onClick={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
-                          className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-50 text-slate-600 border border-slate-200 dark:bg-white/5 dark:border-white/5 dark:text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-100 dark:hover:bg-white/10 transition-all duration-150 cursor-pointer select-none"
+                          className="cursor-pointer"
+                          onClick={() => handleTopicClick(index)}
                         >
                           <span>{LANGUAGES.find(l => l.name === selectedLanguage)?.name || "English"}</span>
                           <span className="text-slate-400 dark:text-slate-500 text-[9px]">▼</span>
@@ -940,33 +1665,65 @@ const StoriesComponent = () => {
                         inputRef.current = el;
                       }}
                       className={`w-full h-32 sm:h-40 resize-none border-none outline-none bg-transparent text-slate-800 dark:text-slate-200 focus:ring-0 text-sm sm:text-base leading-relaxed placeholder:italic placeholder:text-slate-400 dark:placeholder:text-slate-500 pr-12 transition-colors duration-200 ${
-                        isOverLimit ? "ring-1 ring-red-500 rounded-lg p-2" : isNearLimit ? "ring-1 ring-yellow-400 rounded-lg p-2" : ""
+                        isOverLimit || isDangerLimit ? "ring-1 ring-red-500 rounded-lg p-2" : isNearLimit ? "ring-1 ring-yellow-400 rounded-lg p-2" : ""
                       }`}
                       placeholder={text.promptPlaceholder}
                       value={textareaValue}
                       maxLength={MAX_PROMPT_LENGTH}
                       onChange={(e) => setTextareaValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
+onKeyDown={(e) => {
+                        // Keep existing behavior: Enter -> next step (unless Shift is held)
+                        if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                           e.preventDefault();
                           handleNextStep();
+                          return;
+                        }
+
+                        // Ctrl/Cmd + Enter -> generate story (only when prompt editor is focused)
+                        const isMac =
+                          typeof navigator !== "undefined" &&
+                          navigator.platform.toUpperCase().includes("MAC");
+                        const shouldTrigger = isMac ? e.metaKey : e.ctrlKey;
+
+                        if (
+                          e.key === "Enter" &&
+                          shouldTrigger &&
+                          !e.shiftKey &&
+                          !loading &&
+                          !isOverLimit &&
+                          textareaValue.trim().length > 0
+                        ) {
+                          e.preventDefault();
+
+                          // Prevent duplicate requests while generation is already in progress
+                          if (isGenerationInProgressRef.current) return;
+
+                          // Reuse the same generation flow as clicking the Generate button
+                          const form = e.currentTarget.closest("form");
+                          form?.requestSubmit();
                         }
                       }}
                     />
 
                     <div className="absolute right-3.5 top-3.5 flex flex-col gap-2.5">
                       {textareaValue.length > 0 && (
+                          {topic.selected ? (
+                            <i className="fa-solid fa-check"></i>
+                          ) : (
+                            <i className="fa-solid fa-plus"></i>
+                          )}{" "}
+                          {topic.title}
+                        </button>
                         <button
                           type="button"
-                          onClick={handleClearPrompt}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 hover:text-red-500 dark:hover:text-red-400 shadow-sm transition-colors duration-150 cursor-pointer"
-                          aria-label={text.close}
-                          title={text.close}
+                          className="cursor-pointer border-l border-current/30 pl-2 disabled:cursor-not-allowed disabled:opacity-40"
+                          onClick={() => handleRemoveTopic(index)}
+                          disabled={topics.length <= 2}
+                          aria-label={`Remove ${topic.title}`}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
+                          <i className="fa-solid fa-xmark"></i>
                         </button>
+
                       )}
 
                       <button
@@ -996,9 +1753,10 @@ const StoriesComponent = () => {
                       </div>
 
                       <span className={`text-[11px] font-bold tabular-nums shrink-0 ml-auto ${
-                        isOverLimit ? "text-red-500 dark:text-red-400" : isNearLimit ? "text-amber-500" : "text-slate-400"
+                        isOverLimit || isDangerLimit ? "text-red-500 dark:text-red-400" : isNearLimit ? "text-amber-500" : "text-slate-400"
                       }`}>
                         {textareaValue.length} / {MAX_PROMPT_LENGTH}
+
                       </span>
                     </div>
                   </div>
@@ -1006,9 +1764,10 @@ const StoriesComponent = () => {
                   <div className="text-[11px] font-medium leading-relaxed text-slate-400 dark:text-slate-500 select-none w-full box-border">
                     💡 <span className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mr-1">{text.keyboardTip}</span>
                     {text.press} <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Enter</kbd> to continue &bull;{" "}
-                    <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Ctrl + Enter</kbd> also works &bull;{" "}
+                    Press <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">{typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC") ? "Cmd" : "Ctrl"} + Enter</kbd> to generate &bull;{" "}
                     <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Shift + Enter</kbd> {text.forNewLine}
                   </div>
+
 
                   <div className="flex justify-end pt-2 w-full box-border">
                     <button
@@ -1018,21 +1777,30 @@ const StoriesComponent = () => {
                     >
                       <span>Next: Cast of Characters ➡️</span>
                     </button>
+            {/* Alternate Endings Section */}
+            {selectedStory && (
+              <div className="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-xl p-6 mt-8 relative overflow-hidden">
+                <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-purple-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-200 flex items-center gap-2">
+                      Alternate Endings
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Explore alternate narrative styles for your story context.
+                    </p>
                   </div>
-                </>
-              ) : (
-                <>
-                  {/* Step 2 Content: Cast of Characters */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5 select-none w-full">
+                  {selectedStory.content !== originalStoryContent[selectedStory.uuid] && (
                     <button
                       type="button"
-                      onClick={() => setCurrentStep(1)}
-                      className="flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      onClick={handleResetEnding}
+                      className="rounded-lg px-4 py-2 bg-red-950/40 hover:bg-red-900/60 text-red-200 border border-red-700/50 font-semibold text-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
                     >
-                      ⬅️ Back to Story Details
+                      <i className="fa-solid fa-rotate-left"></i> Reset to Original
                     </button>
-                    <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Step 2 of 2</span>
-                  </div>
+                  )}
+                </div>
 
                   <div className="space-y-2 select-none">
                     <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Cast of Characters</h2>
@@ -1041,9 +1809,10 @@ const StoriesComponent = () => {
                     </p>
                   </div>
 
+
                       <span
   className={`text-xs tabular-nums ml-auto flex gap-2 ${
-    isOverLimit
+    isOverLimit || isDangerLimit
       ? "text-red-400 font-medium"
       : isNearLimit
       ? "text-yellow-400"
@@ -1089,65 +1858,370 @@ const StoriesComponent = () => {
                               />
                             </div>
 
-                            <div className="space-y-1.5">
-                              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Role</label>
-                              <select
-                                value={char.role}
-                                onChange={(e) => handleCharacterChange(char.id, "role", e.target.value)}
-                                className="w-full px-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl outline-none focus:border-blue-500/40 text-slate-800 dark:text-slate-200"
-                              >
-                                <option value="Protagonist">Protagonist (Hero/Main Character)</option>
-                                <option value="Companion">Companion (Sidekick/Friend)</option>
-                                <option value="Rival">Rival (Competitor)</option>
-                                <option value="Antagonist">Antagonist (Villain/Obstacle)</option>
-                              </select>
-                            </div>
+                  <div className="space-y-4">
+                    {characters.map((char, index) => (
+                      <div
+                        key={char.id}
+                        className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/5 rounded-2xl space-y-4 relative"
+                      >
+                        <div className="flex items-center justify-between select-none">
+                          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            👤 Character #{index + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCharacter(char.id)}
+                            className="text-xs font-bold text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 hover:underline cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Name</label>
+                            <input
+                              type="text"
+                              value={char.name}
+                              onChange={(e) => handleCharacterChange(char.id, "name", e.target.value)}
+                              placeholder="e.g. Leo, Sir Cedric, Bella"
+                              className="w-full px-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl outline-none focus:border-blue-500/40 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 placeholder:italic"
+                            />
                           </div>
 
                           <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Personality & Traits</label>
-                            <textarea
-                              value={char.personality}
-                              onChange={(e) => handleCharacterChange(char.id, "personality", e.target.value)}
-                              placeholder="e.g. Brave but clumsy, loves eating carrots, afraid of the dark..."
-                              rows={2}
-                              className="w-full px-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl outline-none resize-none focus:border-blue-500/40 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 placeholder:italic"
-                            />
+                            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Role</label>
+                            <select
+                              value={char.role}
+                              onChange={(e) => handleCharacterChange(char.id, "role", e.target.value)}
+                              className="w-full px-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl outline-none focus:border-blue-500/40 text-slate-800 dark:text-slate-200"
+                            >
+                              <option value="Protagonist">Protagonist (Hero/Main Character)</option>
+                              <option value="Companion">Companion (Sidekick/Friend)</option>
+                              <option value="Rival">Rival (Competitor)</option>
+                              <option value="Antagonist">Antagonist (Villain/Obstacle)</option>
+                            </select>
                           </div>
                         </div>
-                      ))}
 
-                      <div className="flex justify-start select-none">
-                        <button
-                          type="button"
-                          onClick={handleAddCharacter}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase tracking-wider bg-slate-50 border border-slate-200/80 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:border-white/5 dark:text-slate-400 dark:hover:bg-white/10 rounded-xl transition-all cursor-pointer"
-                        >
-                          <i className="fas fa-plus" />
-                          <span>Add Another Character</span>
-                        </button>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Personality & Traits</label>
+                          <textarea
+                            value={char.personality}
+                            onChange={(e) => handleCharacterChange(char.id, "personality", e.target.value)}
+                            placeholder="e.g. Brave but clumsy, loves eating carrots, afraid of the dark..."
+                            rows={2}
+                            className="w-full px-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl outline-none resize-none focus:border-blue-500/40 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 placeholder:italic"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
 
-                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-white/5 w-full box-border select-none">
+                  <div className="flex justify-start select-none">
                     <button
-                      type="submit"
-                      disabled={loading || isOverLimit}
-                      aria-busy={loading}
-                      aria-disabled={loading || isOverLimit}
-                      className={`w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs sm:text-sm font-bold py-3 px-6 rounded-xl shadow-md shadow-blue-500/10 transition-all duration-150 active:scale-[0.98] select-none uppercase tracking-wider flex items-center justify-center gap-2 ${
-                        loading || isOverLimit ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                      } group`}
+                      type="button"
+                      onClick={handleAddCharacter}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase tracking-wider bg-slate-50 border border-slate-200/80 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:border-white/5 dark:text-slate-400 dark:hover:bg-white/10 rounded-xl transition-all cursor-pointer"
                     >
-                      {loading ? (
-                        <i className="fas fa-circle-notch text-sm animate-spin" />
-                      ) : (
-                        <i className="fas fa-wand-magic-sparkles text-sm group-hover:scale-110 transition-transform duration-200" />
-                      )}
-                      <span>{loading ? text.generating : text.generate}</span>
+                      <i className="fas fa-plus" />
+                      <span>Add Another Character</span>
                     </button>
                   </div>
+                {isGeneratingEndings ? (
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-purple-500 mb-4"></div>
+                    <p className="text-slate-300 text-sm font-medium animate-pulse">
+                      Generating alternate endings...
+                    </p>
+                  </div>
+                ) : endingsCache[selectedStory.uuid]?.length > 0 ? (
+                  <div>
+                    {/* Tabs */}
+                    <div className="flex border-b border-slate-700/50 mb-6 overflow-x-auto whitespace-nowrap scrollbar-none">
+                      {[
+                        { name: "Happy Ending" },
+                        { name: "Dark Ending" },
+                        { name: "Plot Twist Ending" },
+                        { name: "Open Ending" },
+                        { name: "Cliffhanger Ending" }
+                      ].map((s) => {
+                        const hasEndings = endingsCache[selectedStory.uuid] || [];
+                        const endingData = hasEndings.find((e) => e.style === s.name);
+                        const isApplied = endingData && selectedStory.content === endingData.fullStory;
+                        
+                        return (
+                          <button
+                            key={s.name}
+                            type="button"
+                            onClick={() => setActiveEndingTab(s.name)}
+                            className={`px-5 py-3 font-semibold text-sm flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                              activeEndingTab === s.name
+                                ? "border-purple-500 text-purple-400 bg-purple-500/5"
+                                : "border-transparent text-slate-400 hover:text-slate-300 hover:border-slate-700"
+                            }`}
+                          >
+                            <span>{s.name}</span>
+                            {isApplied && (
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping"></span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Tab content */}
+                    {(() => {
+                      const currentEndings = endingsCache[selectedStory.uuid] || [];
+                      const currentEndingData = currentEndings.find((e) => e.style === activeEndingTab);
+                      if (!currentEndingData) return null;
+                      
+                      const isCurrentlyApplied = selectedStory.content === currentEndingData.fullStory;
+                      
+                      return (
+                        <div className="bg-slate-900/40 rounded-xl p-6 border border-slate-700/30">
+                          <div className="flex justify-between items-center mb-4">
+                            <h4 className="text-lg font-bold text-slate-200">
+                              {activeEndingTab} Suggestion
+                            </h4>
+                            <div>
+                              {isCurrentlyApplied ? (
+                                <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full font-semibold flex items-center gap-1.5">
+                                  <i className="fa-solid fa-check"></i> Applied to Story
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleApplyEnding(currentEndingData)}
+                                  className="rounded-lg px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-bold text-sm transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-md hover:shadow-purple-500/20"
+                                >
+                                  Apply to Story
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-4">
+                            <div className="bg-slate-950/60 p-5 rounded-xl border border-slate-800 leading-relaxed text-slate-300 text-sm md:text-base italic shadow-inner whitespace-pre-wrap">
+                              <p>{currentEndingData.ending}</p>
+                            </div>
+                            
+                            <div>
+                              <details className="group border border-slate-800 rounded-lg overflow-hidden bg-slate-950/20">
+                                <summary className="list-none flex items-center justify-between p-3 text-xs font-bold text-slate-400 hover:text-slate-200 cursor-pointer select-none">
+                                  <span>PREVIEW FULL STORY WITH THIS ENDING</span>
+                                  <span className="transition-transform duration-200 group-open:rotate-180">Γû╝</span>
+                                </summary>
+                                <div className="p-4 border-t border-slate-800/80 text-xs text-slate-400 leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap">
+                                  {currentEndingData.fullStory}
+                                </div>
+                              </details>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 bg-slate-900/20 border border-dashed border-slate-700/40 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={handleGenerateAlternateEndings}
+                      className="rounded-xl px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white font-bold transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-purple-500/30 flex items-center gap-2 cursor-pointer"
+                    >
+                      Generate Alternate Endings
+                    </button>
+                    <p className="text-xs text-slate-400 mt-3 text-center max-w-sm px-4 leading-relaxed">
+                      Uses the story context to produce 5 unique ending variations (Happy, Dark, Plot Twist, Open, Cliffhanger) for comparison.
+                    </p>
+                  </div>
+
+                  <span className={`text-[11px] font-bold tabular-nums shrink-0 ml-auto ${
+                    isOverLimit || isDangerLimit ? "text-red-500 dark:text-red-400" : isNearLimit ? "text-amber-500" : "text-slate-400"
+                  }`}>
+                    {textareaValue.length} / {MAX_PROMPT_LENGTH}
+                  </span>
+                </div>
+              </div>
+
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* Clear prompt button - next to language selector */}
+      {textareaValue.length > 0 && (
+        <button
+          type="button"
+          onClick={handleClearPrompt}
+          className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all duration-200 border border-red-500/20"
+          aria-label={text.close}
+          title="Clear prompt"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Clear
+        </button>
+      )}
+    </div>
+    {showRestorePrompt && (
+  <div className="mb-3 p-3 rounded-lg border border-indigo-500/40 bg-indigo-500/10">
+    <p className="text-sm text-gray-300 mb-2">
+      📄 A previously saved draft was found. Restore it?
+    </p>
+
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={handleRestoreDraft}
+        className="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm"
+      >
+        Restore
+      </button>
+
+      <button
+        type="button"
+        onClick={handleDiscardDraft}
+        className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm"
+      >
+        Discard
+      </button>
+    </div>
+  </div>
+)}
+    <div className="relative">
+      <textarea
+  {...register("prompt")}
+  ref={(el) => {
+    register("prompt").ref(el);
+    inputRef.current = el;
+  }}
+        className={`w-full h-32 sm:h-40 resize-none border-none outline-none bg-transparent text-gray-800 dark:text-gray-200 focus:ring-0 text-lg leading-relaxed tracking-wide placeholder:italic placeholder:text-gray-500 dark:placeholder:text-gray-400 pr-4 transition-colors duration-200 ${
+          isOverLimit || isDangerLimit
+            ? "ring-1 ring-red-500 rounded"
+            : isNearLimit
+            ? "ring-1 ring-yellow-400 rounded"
+            : ""
+        }`}
+        placeholder={text.promptPlaceholder}
+        value={textareaValue}
+        maxLength={MAX_PROMPT_LENGTH}
+        onChange={(e) => {
+          setTextareaValue(e.target.value);
+          if (validationError) {
+            setValidationError("");
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            const form = e.currentTarget.closest("form");
+            if (form) form.requestSubmit();
+          }
+        }}
+        />
+
+
+      <div className="flex items-center justify-between mt-1 px-1">
+        {validationError ? (
+          <p className="text-xs text-red-400 flex items-center gap-1">
+            <span>⚠</span> {validationError}
+          </p>
+        ) : isOverLimit ? (
+          <p className="text-xs text-red-400 flex items-center gap-1">
+            <span>⚠</span> Character limit reached — generate is disabled
+          </p>
+        ) : isNearLimit ? (
+          <p className="text-xs text-yellow-400 flex items-center gap-1">
+            <span>⚠</span>{" "}
+            {MAX_PROMPT_LENGTH - textareaValue.length} characters remaining
+          </p>
+        ) : (
+          <span />
+        )}
+
+        <span
+          className={`text-xs tabular-nums ml-auto ${
+            isOverLimit || isDangerLimit
+              ? "text-red-400 font-medium"
+              : isNearLimit
+              ? "text-yellow-400"
+              : "text-gray-500"
+          }`}
+        >
+          {textareaValue.length} / {MAX_PROMPT_LENGTH}
+        </span>
+      </div>
+    </div>
+    
+
+{draftStatus && (
+   <p className="text-xs text-green-500 mt-2 px-1">
+    💾 {draftStatus}
+   </p>
+)}
+    
+    <p className="text-xs text-gray-500 mt-1 px-1">
+      💡  <span className="font-medium">Keyboard tip:</span> Press{" "}
+      <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded border border-gray-600">
+        Enter
+      </kbd>{" "}
+      to generate &bull;{" "}
+      <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded border border-gray-600">
+        Ctrl + Enter
+      </kbd>{" "}
+      also works &bull;{" "}
+      <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded border border-gray-600">
+        Shift + Enter
+      </kbd>{" "}
+      for new line
+    </p>
+
+    <div className="flex justify-end mt-2 w-full">
+      <button
+        type="submit"
+        disabled={loading || isOverLimit}
+        aria-busy={loading}
+        aria-disabled={loading || isOverLimit}
+        className={`rounded-lg bg-gradient-to-r from-blue-400 to-indigo-500 text-gray-200 px-6 py-3 font-semibold ${
+          loading || isOverLimit
+            ? "opacity-50 cursor-not-allowed"
+            : "cursor-pointer hover:shadow-lg hover:shadow-indigo-500/50 hover:scale-105"
+        } transition-all duration-300 transform flex items-center space-x-2 group`}
+      >
+        <i className="fas fa-wand-magic-sparkles text-xl transition-transform duration-300 group-hover:animate-wiggle"></i>
+        {loading ? "Generating..." : "Generate"}
+      </button>
+    </div>
+  </form>
+</div>
+            </div>
+
+              <div className="text-[11px] font-medium leading-relaxed text-slate-400 dark:text-slate-500 select-none w-full box-border">
+                💡 <span className="font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mr-1">{text.keyboardTip}</span>
+                {text.press} <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Enter</kbd> {text.toGenerate} &bull;{" "}
+                <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Ctrl + Enter</kbd> {text.alsoWorks} &bull;{" "}
+                <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-md text-slate-700 dark:text-slate-300 mx-0.5 shadow-sm">Shift + Enter</kbd> {text.forNewLine}
+              </div>
+
+              <div className="flex justify-end pt-2 w-full box-border">
+                <button
+                  type="submit"
+                  disabled={loading || isOverLimit}
+                  aria-busy={loading}
+                  aria-disabled={loading || isOverLimit}
+                  className={`w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs sm:text-sm font-bold py-3 px-6 rounded-xl shadow-md shadow-blue-500/10 transition-all duration-150 active:scale-[0.98] select-none uppercase tracking-wider flex items-center justify-center gap-2 ${
+                    loading || isOverLimit ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                  } group`}
+                >
+                  <i className="fas fa-wand-magic-sparkles text-sm group-hover:scale-110 transition-transform duration-200" />
+                  <span>{loading ? text.generating : text.generate}</span>
+                </button>
+              </div>
                 </>
               )}
             </form>
@@ -1161,7 +2235,7 @@ const StoriesComponent = () => {
             <div className="relative w-full" ref={dropdownRef}>
               <button
                 type="button"
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                onClick={handleToggleDropdown}
                 className="w-full p-3.5 bg-white dark:bg-[#111827]/40 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 rounded-xl focus:outline-none focus:border-blue-500/30 flex items-center justify-between text-xs sm:text-sm font-medium text-left transition-all duration-150 cursor-pointer select-none shadow-sm"
               >
                 <span className="truncate pr-4">
@@ -1192,48 +2266,39 @@ const StoriesComponent = () => {
                 </ul>
               )}
             </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
       <RecentPromptsPanel
         recentPrompts={recentPrompts}
-        onSelectPrompt={(prompt) => {
-          setTextareaValue(prompt);
-          setValue("prompt", prompt);
-          setIsRecentPromptsOpen(false);
-        }}
+        onSelectPrompt={handleSelectRecentPrompt}
         onRemovePrompt={removePrompt}
         onClearAll={clearAll}
         isOpen={isRecentPromptsOpen}
-        onToggle={() => setIsRecentPromptsOpen(!isRecentPromptsOpen)}
-        text={{
-          recentPrompts: text.recentPrompts,
-          usePrompt: text.usePrompt,
-          delete: text.delete,
-          clearAll: text.clearAll,
-          noRecentPrompts: text.noRecentPrompts,
-          close: text.close,
-        }}
+        onToggle={handleToggleRecentPrompts}
+        text={recentPromptsText}
       />
 
       {showHelpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white border border-slate-200 dark:border-white/10 rounded-2xl p-6 max-w-md w-full text-slate-900 dark:bg-slate-900 dark:text-white shadow-xl">
+          <div className="bg-white border border-slate-200 dark:border-white/10 rounded-2xl p-6 max-w-md w-full text-slate-900 dark:bg-slate-900 dark:border-slate-700 dark:text-white shadow-xl">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 tracking-tight select-none border-b border-slate-100 dark:border-white/5 pb-2.5">
               {text.shortcuts}
             </h2>
 
-            <div className="space-y-3.5 text-slate-600 text-xs sm:text-sm dark:text-slate-400 font-medium select-none">
-              <div className="flex justify-between items-center"><span className="text-slate-400">{text.openHelp}</span> <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/10 rounded border border-slate-200 dark:border-white/10 text-[11px] font-bold shadow-sm">?</kbd></div>
-              <div className="flex justify-between items-center"><span className="text-slate-400">{text.closeHelp}</span> <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/10 rounded border border-slate-200 dark:border-white/10 text-[11px] font-bold shadow-sm">Esc</kbd></div>
-              <div className="flex justify-between items-center"><span className="text-slate-400">{text.focusPrompt}</span> <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/10 rounded border border-slate-200 dark:border-white/10 text-[11px] font-bold shadow-sm">/</kbd></div>
-              <div className="flex justify-between items-center"><span className="text-slate-400">{text.generateStory}</span> <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/10 rounded border border-slate-200 dark:border-white/10 text-[11px] font-bold shadow-sm">Ctrl + Enter</kbd></div>
-              <div className="flex justify-between items-center"><span className="text-slate-400">{text.publishStory}</span> <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/10 rounded border border-slate-200 dark:border-white/10 text-[11px] font-bold shadow-sm">Ctrl + S</kbd></div>
+            <div className="space-y-3 text-slate-600 text-sm dark:text-gray-300">
+              <div><kbd>?</kbd> {text.openHelp}</div>
+              <div><kbd>Esc</kbd> {text.closeHelp}</div>
+              <div><kbd>/</kbd> {text.focusPrompt}</div>
+              <div><kbd>Ctrl + Enter</kbd> {text.generateStory}</div>
+              <div><kbd>Ctrl + S</kbd> {text.publishStory}</div>
             </div>
 
             <button
-              onClick={() => setShowHelpModal(false)}
+              onClick={handleCloseHelp}
               className="mt-6 w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-wider py-2.5 rounded-xl transition-colors shadow-sm select-none cursor-pointer"
             >
               {text.close}
@@ -1242,9 +2307,8 @@ const StoriesComponent = () => {
         </div>
       )}
 
-      {loading && <StoryGeneratingAnimation onCancel={handleCancelGeneration} />}
+      {loading && <StoryGeneratingAnimation onCancel={handleCancelGeneration} isHighLatency={isHighLatency} />}
 
-      {/* Search UI */}
       {stories.length > 0 && (
         <div className="mb-6 bg-slate-800/80 backdrop-blur-xl border border-slate-700/50 p-4 rounded-2xl">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -1286,64 +2350,71 @@ const StoriesComponent = () => {
 
       <div className="fixed top-[-200px] left-[250px] w-[800px] h-[350px] bg-blue-500/20 rounded-full blur-3xl -z-10"></div>
       {showLimitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white border border-slate-200 dark:border-white/10 rounded-2xl shadow-xl max-w-md w-full p-6 text-slate-900 dark:bg-slate-900 dark:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-[0_0_15px_rgba(59,130,246,0.15)] max-w-md w-full p-6 transform transition-all text-slate-900 dark:bg-[#0f172a] dark:border-white/10 dark:text-white dark:shadow-[0_0_15px_rgba(59,130,246,0.5)]">
             <div className="text-center">
-              <div className="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-500/10 select-none">
-                <i className="fas fa-lock text-xl text-blue-500 dark:text-blue-400" />
+              <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i className="fas fa-lock text-2xl text-blue-400"></i>
+        <div className="col-span-1 lg:col-span-4">
+          <GeneratedStoryTimeline
+            content={selectedStory.content}
+            title={selectedStory.title}
+            narrationState={narrationState}
+            narrationWordIndex={narrationWordIndex}
+          />
+
+          <div className="mb-5">
+            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-blue-400">
+              Preview
+            </h1>
+          </div>
+          <div className="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden group">
+            <div className="relative flex flex-col rounded-lg">
+              <div className="relative m-3 overflow-hidden text-white rounded-xl">
+                <ImageFallback
+                  src={selectedStory.imageURL}
+                  alt="card-image"
+                  className="w-full h-48 object-cover transition-transform duration-500 group-hover:scale-105"
+                />
               </div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 tracking-tight select-none">
-                {text.freeLimitReached}
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed font-medium">
-                {text.freeLimitMessage}
-              </p>
-              <div className="flex flex-col gap-2.5 w-full">
-                <Link
-                  to="/login"
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold uppercase tracking-wider py-3 px-4 rounded-xl text-center shadow-md shadow-blue-500/10 transition-all duration-150 active:scale-[0.98] select-none"
-                >
-                  {text.login}
-                </Link>
-                <button
-                  onClick={() => setShowLimitModal(false)}
-                  className="w-full bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 text-xs font-bold uppercase tracking-wider py-3 px-4 rounded-xl transition-all duration-150 active:scale-[0.98] select-none cursor-pointer border border-slate-200/60 dark:border-transparent"
-                >
-                  {text.continueBrowsing}
-                </button>
+              <div className="px-3 py-1">
+                <div className="flex justify-between items-center mb-2 w-full">
+                  <div className="flex items-center gap-2">
+                    <div className="inline-flex items-center rounded-full bg-purple-600 py-1 px-3 text-xs font-semibold text-white shadow-sm">
+                      {selectedStory.tag.toUpperCase()}
+                    </div>
+                    <div className="inline-flex items-center rounded-full bg-indigo-600 py-1 px-3 text-xs font-semibold text-white shadow-sm">
+                      Γëí╞Æ├«├ë {(selectedStory.language || "English").toUpperCase()}
+                    </div>
+                    <div className="inline-flex items-center rounded-full bg-slate-700 py-1 px-2.5 text-xs font-medium text-slate-300 shadow-sm gap-1">
+                      ╬ô├àΓûÆΓê⌐Γòò├à {calculateReadingTime(selectedStory.content)} min read
+                    </div>
+                  </div>
+                  <div>
+                    <BookmarkButton storyId={selectedStory.uuid} />
+                  </div>
+                </div>
+                <h6 className="mb-1 text-gray-300 text-xl font-semibold">
+                  {selectedStory.title}
+                </h6>
+                <p className="text-gray-400 font-light breakwords text-sm sm:text-base">
+                  {getShortenedText(selectedStory.content)}
+                </p>
               </div>
             </div>
           </div>
         </div>
+      </div>
+      {showWorldMap && selectedStory && (
+        <StoryWorldMap
+          story={selectedStory.content}
+          title={selectedStory.title}
+          onClose={() => setShowWorldMap(false)}
+        />
       )}
-     
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4 mt-6">
-          <button
-            onClick={() => setCurrentPage((p) => p - 1)}
-            disabled={currentPage === 1}
-            className="px-4 py-2 rounded bg-slate-700 text-white disabled:opacity-50 cursor-pointer"
-          >
-            Previous
-          </button>
-
-          <span>
-            Page {currentPage} of {totalPages}
-          </span>
-
-          <button
-            onClick={() => setCurrentPage((p) => p + 1)}
-            disabled={currentPage === totalPages}
-            className="px-4 py-2 rounded bg-slate-700 text-white disabled:opacity-50 cursor-pointer"
-          >
-            Next
-          </button>
-        </div>
-      )}
-
       <Toaster position="top-right" reverseOrder={false} />
     </div>
   );
 };
 
-export default StoriesComponent;
+export default StoriesViewComponent;

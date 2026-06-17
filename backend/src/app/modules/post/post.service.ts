@@ -14,11 +14,8 @@ import paginationHelper from "../../../utils/pagination_helper";
 import { postSearchFields } from "./post.constant";
 import { SortOrder, Types } from "mongoose";
 import { GamificationService } from "../gamification/gamification.service";
+import { escapeRegex } from "../../../utils/regex.util";
 const MAX_SEARCH_TERM_LENGTH = 100;
-
-const escapeRegex = (text: string): string => {
-  return text.replace(/[-[\]{}()*+?.,\^$|#\s]/g, "\$&");
-};
 
 interface ICursorPayload {
   value: string;
@@ -109,14 +106,18 @@ const createPost = async (payload: IPostPayload, token: ITokenPayload) => {
       author: user._id,
       updatedBy: user._id,
     });
-      if (res && res.isPublished) {
-        user.postsCount += 1;
-        await user.save();
-        GamificationService.addXp(String(user._id), 50, "CREATED_POST").catch(console.error);
-        if (user.postsCount === 1) {
-          GamificationService.awardBadge(String(user._id), "First Story").catch(console.error);
-        }
+
+    if (res && res.isPublished) {
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        { $inc: { postsCount: 1 } },
+        { new: true }
+      );
+      GamificationService.addXp(String(user._id), 50, "CREATED_POST").catch(console.error);
+      if (updatedUser && updatedUser.postsCount === 1) {
+        GamificationService.awardBadge(String(user._id), "First Story").catch(console.error);
       }
+    }
     return res;
   } catch (error) {
     throw new ApiError(
@@ -174,10 +175,7 @@ const getPosts = async (
     andCondition.push({
       $or: genreList.map((genre) => ({
         tag: {
-          $regex: new RegExp(
-            `^${genre.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
-            "i",
-          ),
+          $regex: new RegExp(`^${escapeRegex(genre)}$`, "i"),
         },
       })),
     });
@@ -358,7 +356,7 @@ const doFeaturedPosts = async (postId: string) => {
   }
 };
 
-const getSinglePost = async (id: string) => {
+const getSinglePost = async (id: string, token?: ITokenPayload | null) => {
   const postById = await Post.findOne({ _id: id, isDeleted: { $ne: true } })
     .populate("author", "name email createdAt")
     .populate({
@@ -372,7 +370,7 @@ const getSinglePost = async (id: string) => {
   return postById;
 };
 
-const getPostsByTag = async (tag: string, excludeId?: string) => {
+const getPostsByTag = async (tag: string, excludeId?: string, limit: number = 2) => {
   if (!tag) {
     return [];
   }
@@ -382,7 +380,7 @@ const getPostsByTag = async (tag: string, excludeId?: string) => {
     query._id = { $ne: excludeId };
   }
   const result = await Post.find(query)
-    .limit(2)
+    .limit(limit)
     .populate("author", "name email createdAt")
     .populate({
       path: "reactions",
@@ -401,11 +399,11 @@ const toggleBookmark = async (postId: string, token: ITokenPayload) => {
     throw new ApiError(httpStatus.BAD_REQUEST, "User not found!");
   }
 
-const postExists = await Post.exists({ _id: postId, isDeleted: { $ne: true } });
-if (!postExists) {
-  throw new ApiError(httpStatus.BAD_REQUEST, "Post not found!");
-}
-  // Check bookmark status atomically
+  const postExists = await Post.exists({ _id: postId, isDeleted: { $ne: true } });
+  if (!postExists) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Post not found!");
+  }
+
   const isBookmarked = await Post.exists({
     _id: postId,
     bookmarks: user._id,
@@ -421,17 +419,17 @@ if (!postExists) {
       message: "Bookmark removed",
       bookmarked: false,
     };
-  } else {
-    await Post.updateOne(
-      { _id: postId },
-      { $addToSet: { bookmarks: user._id } }
-    );
-
-    return {
-      message: "Bookmark added",
-      bookmarked: true,
-    };
   }
+
+  await Post.updateOne(
+    { _id: postId },
+    { $addToSet: { bookmarks: user._id } }
+  );
+
+  return {
+    message: "Bookmark added",
+    bookmarked: true,
+  };
 };
 
 const updatePost = async (
@@ -506,12 +504,17 @@ const deletePost = async (postId: string, token: ITokenPayload) => {
   post.deletedBy = user._id;
   await post.save();
 
-  if (post.isPublished && user.postsCount > 0) {
-    user.postsCount -= 1;
-    await user.save();
+  if (post.isPublished) {
+    await User.findByIdAndUpdate(
+      user._id,
+      { $inc: { postsCount: -1 } }
+    );
   }
 
   await Bookmark.deleteMany({ storyId: postId });
+  // Delete all comments associated with the post to prevent orphaned
+  // comment documents accumulating in the database after post deletion.
+  await Comment.deleteMany({ postId });
 
   return post;
 };
@@ -545,8 +548,10 @@ const remixStory = async (postId: string, prompt: string, token: ITokenPayload) 
   });
 
   if (res) {
-    user.postsCount += 1;
-    await user.save();
+    await User.findByIdAndUpdate(
+      user._id,
+      { $inc: { postsCount: 1 } }
+    );
   }
 
   return res;
@@ -581,8 +586,10 @@ const translateStory = async (postId: string, language: string, token: ITokenPay
   });
 
   if (res) {
-    user.postsCount += 1;
-    await user.save();
+    await User.findByIdAndUpdate(
+      user._id,
+      { $inc: { postsCount: 1 } }
+    );
   }
 
   return res;
@@ -592,6 +599,7 @@ const getGenres = async (): Promise<string[]> => {
   const genres = await Post.distinct("tag", { isDeleted: { $ne: true }, tag: { $nin: [null, ""] } });
   return genres.sort();
 };
+
 
 export const PostService = {
   createPost,
@@ -609,3 +617,4 @@ export const PostService = {
   translateStory,
   getGenres,
 };
+
