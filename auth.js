@@ -495,34 +495,147 @@ function closeLegalModal() {
     if (modal) modal.classList.remove('show');
 }
 
-/* ── Password Visibility Toggling ── */
-function togglePasswordVisibility() {
+/* ── Password Visibility Toggling with Enhanced Accessibility ── */
+
+/**
+ * Enhanced password visibility toggle with:
+ * - Keyboard support (Space/Enter)
+ * - Tooltip display on hover/focus
+ * - Better icon contrast for light/dark themes
+ * - ARIA attributes for screen readers
+ */
+function togglePasswordVisibility(event) {
+    event?.preventDefault?.();
+    
     const field = document.getElementById('password-field');
+    const button = event?.currentTarget || document.querySelector('[onclick*="togglePasswordVisibility"]');
     const icon = document.getElementById('eye-icon');
-    if (!field || !icon) return;
+    const tooltip = button?.querySelector('.password-tooltip');
+    const tooltipText = button?.querySelector('#tooltip-text');
+    
+    if (!field || !icon || !button) return;
 
-    if (field.type === 'password') {
-        field.type = 'text';
-        icon.className = 'fi fi-rr-eye text-[16px]';
-    } else {
-        field.type = 'password';
+    const isVisible = field.type === 'text';
+    
+    // Toggle field type
+    field.type = isVisible ? 'password' : 'text';
+    
+    // Update icon with better contrast
+    if (isVisible) {
+        // Password hidden
         icon.className = 'fi fi-rr-eye-crossed text-[16px]';
+        button.setAttribute('aria-label', 'Show password. Press Space or Enter to toggle.');
+        button.setAttribute('aria-pressed', 'false');
+        button.setAttribute('title', 'Show password (Space/Enter)');
+        if (tooltipText) tooltipText.textContent = 'Show password (Space/Enter)';
+    } else {
+        // Password visible
+        icon.className = 'fi fi-rr-eye text-[16px]';
+        button.setAttribute('aria-label', 'Hide password. Press Space or Enter to toggle.');
+        button.setAttribute('aria-pressed', 'true');
+        button.setAttribute('title', 'Hide password (Space/Enter)');
+        if (tooltipText) tooltipText.textContent = 'Hide password (Space/Enter)';
+    }
+    
+    // Show tooltip briefly on toggle
+    if (tooltip) {
+        tooltip.classList.remove('hidden');
+        setTimeout(() => {
+            if (tooltip && !button.matches(':focus')) {
+                tooltip.classList.add('hidden');
+            }
+        }, 1500);
     }
 }
 
-function toggleConfirmPasswordVisibility() {
+function toggleConfirmPasswordVisibility(event) {
+    event?.preventDefault?.();
+    
     const field = document.getElementById('confirm-password-field');
+    const button = event?.currentTarget || document.querySelector('[onclick*="toggleConfirmPasswordVisibility"]');
     const icon = document.getElementById('confirm-eye-icon');
-    if (!field || !icon) return;
+    const tooltip = button?.querySelector('.password-tooltip');
+    const tooltipText = button?.querySelector('#confirm-tooltip-text');
+    
+    if (!field || !icon || !button) return;
 
-    if (field.type === 'password') {
-        field.type = 'text';
-        icon.className = 'fi fi-rr-eye text-[16px]';
-    } else {
-        field.type = 'password';
+    const isVisible = field.type === 'text';
+    
+    // Toggle field type
+    field.type = isVisible ? 'password' : 'text';
+    
+    // Update icon with better contrast
+    if (isVisible) {
+        // Password hidden
         icon.className = 'fi fi-rr-eye-crossed text-[16px]';
+        button.setAttribute('aria-label', 'Show confirm password. Press Space or Enter to toggle.');
+        button.setAttribute('aria-pressed', 'false');
+        button.setAttribute('title', 'Show password (Space/Enter)');
+        if (tooltipText) tooltipText.textContent = 'Show password (Space/Enter)';
+    } else {
+        // Password visible
+        icon.className = 'fi fi-rr-eye text-[16px]';
+        button.setAttribute('aria-label', 'Hide confirm password. Press Space or Enter to toggle.');
+        button.setAttribute('aria-pressed', 'true');
+        button.setAttribute('title', 'Hide password (Space/Enter)');
+        if (tooltipText) tooltipText.textContent = 'Hide password (Space/Enter)';
+    }
+    
+    // Show tooltip briefly on toggle
+    if (tooltip) {
+        tooltip.classList.remove('hidden');
+        setTimeout(() => {
+            if (tooltip && !button.matches(':focus')) {
+                tooltip.classList.add('hidden');
+            }
+        }, 1500);
     }
 }
+
+// Add keyboard support and tooltip interactions
+document.addEventListener('DOMContentLoaded', () => {
+    const passwordButtons = document.querySelectorAll('.password-toggle-btn');
+    
+    passwordButtons.forEach(button => {
+        const tooltip = button.querySelector('.password-tooltip');
+        let tooltipTimeout;
+        
+        // Keyboard support (Space and Enter keys)
+        button.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'Enter') {
+                e.preventDefault();
+                // Determine which toggle function to call based on the button's onclick
+                if (button.getAttribute('onclick').includes('toggleConfirmPasswordVisibility')) {
+                    toggleConfirmPasswordVisibility({ currentTarget: button });
+                } else {
+                    togglePasswordVisibility({ currentTarget: button });
+                }
+            }
+        });
+        
+        // Tooltip show/hide on hover
+        button.addEventListener('mouseenter', () => {
+            tooltipTimeout = setTimeout(() => {
+                if (tooltip) tooltip.classList.remove('hidden');
+            }, 300);
+        });
+        
+        button.addEventListener('mouseleave', () => {
+            clearTimeout(tooltipTimeout);
+            if (tooltip) tooltip.classList.add('hidden');
+        });
+        
+        // Show tooltip on focus
+        button.addEventListener('focus', () => {
+            if (tooltip) tooltip.classList.remove('hidden');
+        });
+        
+        // Hide tooltip on blur
+        button.addEventListener('blur', () => {
+            if (tooltip) tooltip.classList.add('hidden');
+        });
+    });
+});
 
 /* caps-lock-warning */
 const passwordField = document.getElementById("password-field");
