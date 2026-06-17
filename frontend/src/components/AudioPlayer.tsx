@@ -52,7 +52,23 @@ const controlButtonBaseClass =
 
 const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
   ({ text, title = "Story narration", onWordIndexChange, onPlaybackStateChange }, ref) => {
-    const [voiceGender, setVoiceGender] = useState<"female" | "male">("female");
+    const [voiceGender, setVoiceGender] = useState<"female" | "male">(() => {
+      try {
+        const saved = localStorage.getItem("story-spark-narration-gender");
+        return (saved === "female" || saved === "male") ? saved : "female";
+      } catch {
+        return "female";
+      }
+    });
+
+    useEffect(() => {
+      try {
+        localStorage.setItem("story-spark-narration-gender", voiceGender);
+      } catch (e) {
+        console.warn(e);
+      }
+    }, [voiceGender]);
+
     const speech = useSpeechSynthesis(text, voiceGender);
     const preview = useVoicePreview();
     const favorites = useVoiceFavorites();
@@ -106,7 +122,53 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           speech.setSelectedVoiceId(displayedVoices[0].id);
         }
       }
-    }, [showFavoritesOnly, displayedVoices, speech]);
+    useEffect(() => {
+      const handleKeyDown = (event: KeyboardEvent) => {
+        const target = event.target as HTMLElement;
+        if (
+          target &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT" ||
+            target.isContentEditable)
+        ) {
+          return;
+        }
+
+        if (event.key === " ") {
+          event.preventDefault();
+          if (speech.isPlaying) {
+            speech.pause();
+          } else if (speech.isPaused) {
+            speech.resume();
+          } else {
+            speech.play();
+          }
+        } else if (event.key === "ArrowUp" || event.key === "ArrowRight") {
+          event.preventDefault();
+          const currentIndex = SPEED_OPTIONS.indexOf(speech.rate as any);
+          if (currentIndex !== -1 && currentIndex < SPEED_OPTIONS.length - 1) {
+            speech.setRate(SPEED_OPTIONS[currentIndex + 1]);
+          } else if (speech.rate < 2) {
+            speech.setRate(Math.min(2, speech.rate + 0.25));
+          }
+        } else if (event.key === "ArrowDown" || event.key === "ArrowLeft") {
+          event.preventDefault();
+          const currentIndex = SPEED_OPTIONS.indexOf(speech.rate as any);
+          if (currentIndex !== -1 && currentIndex > 0) {
+            speech.setRate(SPEED_OPTIONS[currentIndex - 1]);
+          } else if (speech.rate > 0.5) {
+            speech.setRate(Math.max(0.5, speech.rate - 0.25));
+          }
+        }
+      };
+
+      window.addEventListener("keydown", handleKeyDown);
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    }, [speech]);
+
 
     const isLoading = speech.isSupported && !speech.isReady;
     const canNarrate = speech.isSupported && speech.isReady && text.trim().length > 0;
@@ -174,7 +236,7 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           </div>
         ) : (
           <div className="mt-4 space-y-4">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <button
                 type="button"
                 role="button"
@@ -227,78 +289,80 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
                 Stop
               </button>
             </div>
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(140px,160px)_minmax(160px,1fr)_minmax(160px,1fr)_minmax(200px,1fr)] lg:items-end">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
-                  <span>Progress</span>
-                  <span aria-live="polite">
-                    {speech.isPlaying || speech.isPaused ? spokenWordCount : 0} / {speech.progress.totalWords} words
-                  </span>
-                </div>
+            {/* Progress bar spans full width */}
+            <div className="space-y-2 mb-4 w-full">
+              <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
+                <span>Progress</span>
+                <span aria-live="polite">
+                  {speech.isPlaying || speech.isPaused ? spokenWordCount : 0} / {speech.progress.totalWords} words
+                </span>
+              </div>
+              <div
+                role="progressbar"
+                aria-label="Narration progress"
+                aria-valuemin={0}
+                aria-valuemax={speech.progress.totalWords}
+                aria-valuenow={spokenWordCount}
+                className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+              >
                 <div
-                  role="progressbar"
-                  aria-label="Narration progress"
-                  aria-valuemin={0}
-                  aria-valuemax={speech.progress.totalWords}
-                  aria-valuenow={spokenWordCount}
-                  className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-all duration-300"
+                  style={{ width: `${Math.round(speech.progress.percentage * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Responsive settings controls grid */}
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 items-end">
+              <div className="space-y-2">
+                <label
+                  htmlFor={speedSelectId}
+                  className="text-sm font-medium text-slate-700 dark:text-slate-300"
                 >
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-all duration-300"
-                    style={{ width: `${Math.round(speech.progress.percentage * 100)}%` }}
-                  />
+                  Playback speed
+                </label>
+                <div className="relative">
+                  <select
+                    id={speedSelectId}
+                    aria-label="Playback speed"
+                    role="combobox"
+                    value={speech.rate}
+                    onChange={(event) => speech.setRate(Number(event.target.value))}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400 dark:focus:ring-indigo-500/20"
+                  >
+                    {SPEED_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option.toFixed(2).replace(/\.00$/, "")}&times;
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label
-                    htmlFor={speedSelectId}
-                    className="text-sm font-medium text-slate-700 dark:text-slate-300"
+              <div className="space-y-2">
+                <label
+                  htmlFor={voiceGenderSelectId}
+                  className="text-sm font-medium text-slate-700 dark:text-slate-300"
+                >
+                  Voice gender
+                </label>
+                <div className="relative">
+                  <select
+                    id={voiceGenderSelectId}
+                    aria-label="Voice gender"
+                    role="combobox"
+                    value={voiceGender}
+                    onChange={(event) => setVoiceGender(event.target.value as "female" | "male")}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400 dark:focus:ring-indigo-500/20"
                   >
-                    Playback speed
-                  </label>
-                  <div className="relative">
-                    <select
-                      id={speedSelectId}
-                      aria-label="Playback speed"
-                      role="combobox"
-                      value={speech.rate}
-                      onChange={(event) => speech.setRate(Number(event.target.value))}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400 dark:focus:ring-indigo-500/20"
-                    >
-                      {SPEED_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option.toFixed(2).replace(/\.00$/, "")}&times;
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    <option value="female">Female voice</option>
+                    <option value="male">Male voice</option>
+                  </select>
                 </div>
+              </div>
 
-                <div className="space-y-2">
-                  <label
-                    htmlFor={voiceGenderSelectId}
-                    className="text-sm font-medium text-slate-700 dark:text-slate-300"
-                  >
-                    Voice
-                  </label>
-                  <div className="relative">
-                    <select
-                      id={voiceGenderSelectId}
-                      aria-label="Voice gender"
-                      role="combobox"
-                      value={voiceGender}
-                      onChange={(event) => setVoiceGender(event.target.value as "female" | "male")}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-indigo-400 dark:focus:ring-indigo-500/20"
-                    >
-                      <option value="female">Female voice</option>
-                      <option value="male">Male voice</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2 col-span-1 sm:col-span-2 md:col-span-1">
+                <div className="grid gap-3 grid-cols-2">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                       Pitch
@@ -373,7 +437,7 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
                 >
                   Voice
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
