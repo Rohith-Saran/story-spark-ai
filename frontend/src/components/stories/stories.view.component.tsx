@@ -1,14 +1,26 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
-import { getShortenedText, ITopicData, topicsData, getWordCount, SELECTED_TOPIC_CLASSES } from "./stories.utils";
+import {
+  getShortenedText,
+  ITopicData,
+  topicsData,
+  getWordCount,
+  SELECTED_TOPIC_CLASSES,
+} from "./stories.utils";
 import toast, { Toaster } from "react-hot-toast";
-import { useCreatePostMutation, useDeletePostMutation } from "../../redux/apis/post.api";
+import {
+  useCreatePostMutation,
+  useDeletePostMutation,
+} from "../../redux/apis/post.api";
 import { useGetProfileInfoQuery } from "../../redux/apis/user.api";
 import jsPDF from "jspdf";
 import StoryWorldMap from "../story-map/StoryWorldMap";
 import BookmarkButton from "../BookmarkButton";
 import logo from "../../assets/logoNew.png";
 import StoryGeneratingAnimation from "../loading/story-generating-animation.component";
-import AudioPlayer, { type AudioPlayerHandle, type NarrationPlaybackState } from "../AudioPlayer";
+import AudioPlayer, {
+  type AudioPlayerHandle,
+  type NarrationPlaybackState,
+} from "../AudioPlayer";
 import { useLocation } from "react-router-dom";
 import {
   useGenerateAlternateEndingsMutation,
@@ -98,10 +110,12 @@ const StoriesViewComponent: React.FC<StoriesComponentProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [showWorldMap, setShowWorldMap] = useState<boolean>(false);
-const [, setShowRemix] = useState<boolean>(false);
+  const [, setShowRemix] = useState<boolean>(false);
   const [createPost] = useCreatePostMutation();
   const [deletePost] = useDeletePostMutation();
-  const { data: profile } = useGetProfileInfoQuery(undefined, { skip: !isLogin });
+  const { data: profile } = useGetProfileInfoQuery(undefined, {
+    skip: !isLogin,
+  });
   const lastSavedContentRef = useRef<string>("");
   const isSavingRef = useRef<boolean>(false);
   const hasSavedSessionRef = useRef<boolean>(false);
@@ -113,13 +127,17 @@ const [, setShowRemix] = useState<boolean>(false);
   const [originalStoryContent, setOriginalStoryContent] = useState<{
     [uuid: string]: string;
   }>({});
-  const [isGeneratingEndings, setIsGeneratingEndings] = useState<boolean>(false);
-  const [activeEndingTab, setActiveEndingTab] = useState<string>("Happy Ending");
+  const [isGeneratingEndings, setIsGeneratingEndings] =
+    useState<boolean>(false);
+  const [activeEndingTab, setActiveEndingTab] =
+    useState<string>("Happy Ending");
   const [narrationWordIndex, setNarrationWordIndex] = useState<number>(0);
-  const [narrationState, setNarrationState] = useState<NarrationPlaybackState>("idle");
+  const [narrationState, setNarrationState] =
+    useState<NarrationPlaybackState>("idle");
 
   const [generateAlternateEndings] = useGenerateAlternateEndingsMutation();
-  const [generateFreeAlternateEndings] = useGenerateFreeAlternateEndingsMutation();
+  const [generateFreeAlternateEndings] =
+    useGenerateFreeAlternateEndingsMutation();
 
   useEffect(() => {
     if (selectedStory && !originalStoryContent[selectedStory.uuid]) {
@@ -132,12 +150,14 @@ const [, setShowRemix] = useState<boolean>(false);
 
   useEffect(() => {
     if (narrationState === "playing") {
-      const activeWordElement = document.querySelector('[data-active-word="true"]');
+      const activeWordElement = document.querySelector(
+        '[data-active-word="true"]',
+      );
       if (activeWordElement) {
         activeWordElement.scrollIntoView({
           behavior: "smooth",
           block: "center",
-          inline: "nearest"
+          inline: "nearest",
         });
       }
     }
@@ -150,17 +170,17 @@ const [, setShowRemix] = useState<boolean>(false);
     try {
       const payload = {
         title: selectedStory.title,
-        content: originalStoryContent[selectedStory.uuid] || selectedStory.content,
+        content:
+          originalStoryContent[selectedStory.uuid] || selectedStory.content,
         tag: selectedStory.tag,
 
         language: selectedStory.language || "English",
-
       };
-      
+
       const generationRequest = isLogin
         ? generateAlternateEndings(payload)
         : generateFreeAlternateEndings(payload);
-        
+
       const res = await generationRequest.unwrap();
       if (res && res.data) {
         setEndingsCache((prev) => ({
@@ -180,7 +200,11 @@ const [, setShowRemix] = useState<boolean>(false);
     }
   };
 
-  const handleApplyEnding = (endingData: { style: string; ending: string; fullStory: string }) => {
+  const handleApplyEnding = (endingData: {
+    style: string;
+    ending: string;
+    fullStory: string;
+  }) => {
     if (!selectedStory) return;
     const updatedStory = {
       ...selectedStory,
@@ -188,7 +212,7 @@ const [, setShowRemix] = useState<boolean>(false);
     };
     setSelectedStory(updatedStory);
     setStories(
-      stories.map((s) => (s.uuid === selectedStory.uuid ? updatedStory : s))
+      stories.map((s) => (s.uuid === selectedStory.uuid ? updatedStory : s)),
     );
     toast.success(`${endingData.style} applied to story!`);
   };
@@ -203,7 +227,7 @@ const [, setShowRemix] = useState<boolean>(false);
     };
     setSelectedStory(updatedStory);
     setStories(
-      stories.map((s) => (s.uuid === selectedStory.uuid ? updatedStory : s))
+      stories.map((s) => (s.uuid === selectedStory.uuid ? updatedStory : s)),
     );
     toast.success("Reverted to original story ending!");
   };
@@ -234,7 +258,7 @@ const [, setShowRemix] = useState<boolean>(false);
       window.speechSynthesis.cancel();
       const cleanContent = selectedStory.content.replace(/<[^>]*>/g, "");
       const utterance = new SpeechSynthesisUtterance(cleanContent);
-      
+
       utterance.onend = () => {
         setIsPlayingAudio(false);
         setIsPausedAudio(false);
@@ -247,9 +271,10 @@ const [, setShowRemix] = useState<boolean>(false);
       };
 
       const voices = window.speechSynthesis.getVoices();
-      const englishVoice = voices.find(
-        (v) => v.lang.startsWith("en-") && v.name.includes("Google")
-      ) || voices.find((v) => v.lang.startsWith("en-"));
+      const englishVoice =
+        voices.find(
+          (v) => v.lang.startsWith("en-") && v.name.includes("Google"),
+        ) || voices.find((v) => v.lang.startsWith("en-"));
       if (englishVoice) {
         utterance.voice = englishVoice;
       }
@@ -358,7 +383,13 @@ const [, setShowRemix] = useState<boolean>(false);
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [selectedStory, selectedStory?.content, isLogin, selectTopics, createPost]);
+  }, [
+    selectedStory,
+    selectedStory?.content,
+    isLogin,
+    selectTopics,
+    createPost,
+  ]);
 
   const handelStorySelection = (story: IStories) => {
     setSelectedStory(story);
@@ -367,10 +398,8 @@ const [, setShowRemix] = useState<boolean>(false);
   const handleTopicClick = (index: number) => {
     setTopics((currentTopics) =>
       currentTopics.map((topic, topicIndex) =>
-        topicIndex === index
-          ? { ...topic, selected: !topic.selected }
-          : topic
-      )
+        topicIndex === index ? { ...topic, selected: !topic.selected } : topic,
+      ),
     );
   };
   const handleAddTopic = () => {
@@ -383,7 +412,7 @@ const [, setShowRemix] = useState<boolean>(false);
 
     const normalizedTitle = title.startsWith("#") ? title : `#${title}`;
     const topicExists = topics.some(
-      (topic) => topic.title.toLowerCase() === normalizedTitle.toLowerCase()
+      (topic) => topic.title.toLowerCase() === normalizedTitle.toLowerCase(),
     );
 
     if (topicExists) {
@@ -410,26 +439,39 @@ const [, setShowRemix] = useState<boolean>(false);
     }
 
     setTopics((currentTopics) =>
-      currentTopics.filter((_, topicIndex) => topicIndex !== index)
+      currentTopics.filter((_, topicIndex) => topicIndex !== index),
     );
   };
+
   const handleCopyStory = async () => {
-    if (selectedStory?.content) {
+    if (!selectedStory?.content) return;
+    try {
       await navigator.clipboard.writeText(selectedStory.content);
       setIsCopied(true);
       toast.success("Story copied!");
       setTimeout(() => setIsCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy story. Please copy manually.");
     }
   };
 
   const handleExportPDF = async () => {
-    if (!selectedStory) { toast.error("No story available to export."); return; }
-    if (!selectedStory.content?.trim()) {toast.error("Story content is empty. Cannot export.");return;}
+    if (!selectedStory) {
+      toast.error("No story available to export.");
+      return;
+    }
+    if (!selectedStory.content?.trim()) {
+      toast.error("Story content is empty. Cannot export.");
+      return;
+    }
     const toastId = toast.loading("Preparing your premium PDF...");
 
     try {
       // Helper to load image assets asynchronously with a safe timeout
-      const loadImageWithTimeout = (src: string, timeoutMs: number = 3000): Promise<HTMLImageElement> => {
+      const loadImageWithTimeout = (
+        src: string,
+        timeoutMs: number = 3000,
+      ): Promise<HTMLImageElement> => {
         return new Promise((resolve, reject) => {
           const img = new Image();
           img.crossOrigin = "anonymous";
@@ -491,7 +533,14 @@ const [, setShowRemix] = useState<boolean>(false);
       if (logoImg) {
         const logoHeight = 8;
         const logoWidth = (logoImg.width / logoImg.height) * logoHeight;
-        doc.addImage(logoImg, "PNG", leftMargin, yCursor, logoWidth, logoHeight);
+        doc.addImage(
+          logoImg,
+          "PNG",
+          leftMargin,
+          yCursor,
+          logoWidth,
+          logoHeight,
+        );
       } else {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
@@ -502,7 +551,9 @@ const [, setShowRemix] = useState<boolean>(false);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(148, 163, 184); // Slate 400
-      doc.text("PREMIUM AI GENERATED STORY", 190, yCursor + 5, { align: "right" });
+      doc.text("PREMIUM AI GENERATED STORY", 190, yCursor + 5, {
+        align: "right",
+      });
 
       yCursor += 10;
 
@@ -516,7 +567,14 @@ const [, setShowRemix] = useState<boolean>(false);
       // 2. Story Banner Image (only on Page 1)
       if (storyImg) {
         const bannerHeight = 55;
-        doc.addImage(storyImg, "JPEG", leftMargin, yCursor, printableWidth, bannerHeight);
+        doc.addImage(
+          storyImg,
+          "JPEG",
+          leftMargin,
+          yCursor,
+          printableWidth,
+          bannerHeight,
+        );
         yCursor += bannerHeight + 8;
       }
 
@@ -625,7 +683,8 @@ const [, setShowRemix] = useState<boolean>(false);
           doc.setFont("helvetica", "normal");
           doc.setFontSize(8);
           doc.setTextColor(148, 163, 184); // Slate 400
-          const headerTitle = title.length > 50 ? title.substring(0, 50) + "..." : title;
+          const headerTitle =
+            title.length > 50 ? title.substring(0, 50) + "..." : title;
           doc.text(headerTitle, 190, 14, { align: "right" });
 
           doc.setDrawColor(241, 245, 249);
@@ -647,22 +706,31 @@ const [, setShowRemix] = useState<boolean>(false);
   };
 
   const downloadBlob = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-};
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-const getSafeFileName = (title: string, ext: string) => {
-  const cleanTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return `${cleanTitle || "story"}.${ext}`;
-};
+  const getSafeFileName = (title: string, ext: string) => {
+    const cleanTitle = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return `${cleanTitle || "story"}.${ext}`;
+  };
 
-const handleExportMarkdown = () => {
-    if (!selectedStory) { toast.error("No story available to export."); return; }
-    if (!selectedStory.content?.trim()) {toast.error("Story content is empty. Cannot export.");return;}
+  const handleExportMarkdown = () => {
+    if (!selectedStory) {
+      toast.error("No story available to export.");
+      return;
+    }
+    if (!selectedStory.content?.trim()) {
+      toast.error("Story content is empty. Cannot export.");
+      return;
+    }
     try {
       const title = selectedStory.title || "Story";
       const content = selectedStory.content || "";
@@ -670,10 +738,15 @@ const handleExportMarkdown = () => {
       const authorName = isLogin && profile?.name ? profile.name : "Anonymous";
       const isoDate = new Date().toISOString().split("T")[0];
       const markdownContent = `---\ntitle: "${title.replace(/"/g, '\\"')}"\ntag: "${tag.replace(/"/g, '\\"')}"\nauthor: "${authorName.replace(/"/g, '\\"')}"\ndate: "${isoDate}"\n---\n\n# ${title}\n\n${content}\n`;
-      const blob = new Blob([markdownContent], { type: "text/markdown;charset=utf-8;" });
+      const blob = new Blob([markdownContent], {
+        type: "text/markdown;charset=utf-8;",
+      });
       downloadBlob(blob, getSafeFileName(title, "md"));
       toast.success("Markdown downloaded!");
-    } catch (error) { console.error(error); toast.error("Failed to export Markdown."); }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to export Markdown.");
+    }
   };
 
   const handelPublishStory = async () => {
@@ -699,7 +772,10 @@ const handleExportMarkdown = () => {
         try {
           await deletePost(savedPostIdRef.current).unwrap();
         } catch (deleteError) {
-          console.warn("Failed to delete auto-saved draft before publishing:", deleteError);
+          console.warn(
+            "Failed to delete auto-saved draft before publishing:",
+            deleteError,
+          );
         }
       }
       const result = await createPost(post).unwrap();
@@ -723,14 +799,13 @@ const handleExportMarkdown = () => {
 
   const isNarrationActive = narrationState !== "idle";
 
-
-if (isLoading) {
-  return (
-    <div className="flex items-center justify-center py-20">
-      <StoryGeneratingAnimation />
-    </div>
-  );
-}
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <StoryGeneratingAnimation />
+      </div>
+    );
+  }
   if (!selectedStory) {
     return null;
   }
@@ -762,16 +837,18 @@ if (isLoading) {
                 <span className="inline-flex items-center rounded-full bg-blue-900/60 text-blue-300 border border-blue-700/50 py-1 px-3 text-xs font-semibold">
                   Γëí╞Æ├«├ë {selectedStory.language || "English"}
                 </span>
-                {selectedStory.emotions && selectedStory.emotions.length > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 py-1 px-3 text-xs font-semibold">
-                    Γëí╞Æ├┐├¿ {selectedStory.emotions.join(", ")}
-                  </span>
-                )}
+                {selectedStory.emotions &&
+                  selectedStory.emotions.length > 0 && (
+                    <span className="inline-flex items-center rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 py-1 px-3 text-xs font-semibold">
+                      Γëí╞Æ├┐├¿ {selectedStory.emotions.join(", ")}
+                    </span>
+                  )}
               </div>
             </div>
             <div className="flex justify-start sm:justify-end">
               <div className="flex -space-x-5">
-                {stories && stories.length > 0 && (
+                {stories &&
+                  stories.length > 0 &&
                   stories.map((story) => (
                     <button
                       key={story.uuid}
@@ -788,8 +865,7 @@ if (isLoading) {
                         className="w-full h-full object-cover rounded-full"
                       />
                     </button>
-                  ))
-                )}
+                  ))}
               </div>
             </div>
           </div>
@@ -797,20 +873,30 @@ if (isLoading) {
           <div className="bg-slate-800/80 backdrop-blur-xl border border-slate-700/50 p-8 rounded-2xl shadow-2xl relative overflow-hidden">
             <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
             <div className="absolute bottom-[-50px] left-[-50px] w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
-            
+
+            <button
+              type="button"
+              onClick={handleCopyStory}
+              disabled={!selectedStory}
+              aria-label={isCopied ? "Copied!" : "Copy story"}
+              title={isCopied ? "Copied!" : "Copy story"}
+              className="absolute top-4 right-4 z-20 w-9 h-9 rounded-lg bg-slate-700/80 hover:bg-slate-600 text-slate-200 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            >
+              {isCopied ? (
+                <i
+                  className="fa-solid fa-check text-emerald-400"
+                  aria-hidden="true"
+                ></i>
+              ) : (
+                <i className="fa-solid fa-clipboard" aria-hidden="true"></i>
+              )}
+            </button>
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <h3 className="text-xl font-bold text-slate-200 relative z-10">
                 Generated Story
               </h3>
               <div className="flex flex-wrap items-center gap-2 relative z-10">
-                <button
-                  type="button"
-                  className="rounded-lg px-4 py-2 bg-slate-700 text-slate-200 font-semibold cursor-pointer hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={handleCopyStory}
-                  disabled={!selectedStory}
-                >
-                  {isCopied ? "Γ£ô Copied" : "≡ƒôï Copy"}
-                </button>
                 <button
                   type="button"
                   className="rounded-lg px-4 py-2 bg-purple-700 text-slate-200 font-semibold cursor-pointer hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -847,7 +933,9 @@ if (isLoading) {
                   type="button"
                   id="publish-story-btn"
                   className={`rounded-lg px-5 py-2 font-semibold flex items-center space-x-2 cursor-pointer bg-blue-600 text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    loading ? "" : "hover:bg-blue-500 hover:shadow-lg active:scale-95"
+                    loading
+                      ? ""
+                      : "hover:bg-blue-500 hover:shadow-lg active:scale-95"
                   }`}
                   onClick={handelPublishStory}
                   disabled={loading || !selectedStory}
@@ -860,7 +948,8 @@ if (isLoading) {
             {selectedStory.enhancedPrompt && (
               <div className="mb-6 p-4 bg-indigo-900/30 border border-indigo-700/50 rounded-xl relative z-10">
                 <h4 className="text-sm font-semibold text-indigo-300 mb-2 flex items-center gap-2">
-                  <i className="fas fa-wand-magic-sparkles"></i> AI Enhanced Prompt
+                  <i className="fas fa-wand-magic-sparkles"></i> AI Enhanced
+                  Prompt
                 </h4>
                 <p className="text-slate-300 text-sm italic break-words whitespace-pre-wrap">
                   {selectedStory.enhancedPrompt}
@@ -868,90 +957,92 @@ if (isLoading) {
               </div>
             )}
 
-            <div id="story-content" className="prose prose-invert max-w-none text-slate-300 leading-relaxed tracking-wide relative z-10">
+            <div
+              id="story-content"
+              className="prose prose-invert max-w-none text-slate-300 leading-relaxed tracking-wide relative z-10"
+            >
               <p className="break-words whitespace-pre-wrap">
-                {sentenceSegments.length > 0 ? (
-                  sentenceSegments.map((segment: StorySentenceSegment) => {
-                    const isActiveSentence =
-                      isNarrationActive &&
-                      narrationWordIndex >= segment.startWordIndex &&
-                      narrationWordIndex <= segment.endWordIndex;
+                {sentenceSegments.length > 0
+                  ? sentenceSegments.map((segment: StorySentenceSegment) => {
+                      const isActiveSentence =
+                        isNarrationActive &&
+                        narrationWordIndex >= segment.startWordIndex &&
+                        narrationWordIndex <= segment.endWordIndex;
 
-                    const rawParts = segment.text.split(/(\s+)/);
-                    let wordOffset = 0;
+                      const rawParts = segment.text.split(/(\s+)/);
+                      let wordOffset = 0;
 
-                    return (
-                      <span
-                        key={segment.id}
-                        className={isActiveSentence ? "text-slate-100 font-medium transition-colors duration-300" : undefined}
-                      >
-                        {rawParts.map((part, partIdx) => {
-                          if (part === "") return null;
-                          if (/^\s+$/.test(part)) {
-                            return part;
+                      return (
+                        <span
+                          key={segment.id}
+                          className={
+                            isActiveSentence
+                              ? "text-slate-100 font-medium transition-colors duration-300"
+                              : undefined
                           }
+                        >
+                          {rawParts.map((part, partIdx) => {
+                            if (part === "") return null;
+                            if (/^\s+$/.test(part)) {
+                              return part;
+                            }
 
-                          const absoluteWordIndex = segment.startWordIndex + wordOffset;
-                          wordOffset++;
+                            const absoluteWordIndex =
+                              segment.startWordIndex + wordOffset;
+                            wordOffset++;
 
-                          const isActiveWord = isNarrationActive && narrationWordIndex === absoluteWordIndex;
+                            const isActiveWord =
+                              isNarrationActive &&
+                              narrationWordIndex === absoluteWordIndex;
 
-                          if (isActiveWord) {
-                            return (
-                              <span
-                                key={partIdx}
-                                className="bg-indigo-500/30 text-indigo-300 rounded px-1 transition-all duration-150 active-narrated-word"
-                                data-active-word="true"
-                              >
-                                {part}
-                              </span>
-                            );
-                          }
+                            if (isActiveWord) {
+                              return (
+                                <span
+                                  key={partIdx}
+                                  className="bg-indigo-500/30 text-indigo-300 rounded px-1 transition-all duration-150 active-narrated-word"
+                                  data-active-word="true"
+                                >
+                                  {part}
+                                </span>
+                              );
+                            }
 
+                            return <span key={partIdx}>{part}</span>;
+                          })}
+                        </span>
+                      );
+                    })
+                  : (() => {
+                      const rawParts = selectedStory.content.split(/(\s+)/);
+                      let wordOffset = 0;
+                      return rawParts.map((part, partIdx) => {
+                        if (part === "") return null;
+                        if (/^\s+$/.test(part)) {
+                          return part;
+                        }
+
+                        const absoluteWordIndex = wordOffset;
+                        wordOffset++;
+
+                        const isActiveWord =
+                          isNarrationActive &&
+                          narrationWordIndex === absoluteWordIndex;
+
+                        if (isActiveWord) {
                           return (
-                            <span key={partIdx}>
+                            <span
+                              key={partIdx}
+                              className="bg-indigo-500/30 text-indigo-300 rounded px-1 transition-all duration-150 active-narrated-word"
+                              data-active-word="true"
+                            >
                               {part}
                             </span>
                           );
-                        })}
-                      </span>
-                    );
-                  })
-                ) : (
-                  (() => {
-                    const rawParts = selectedStory.content.split(/(\s+)/);
-                    let wordOffset = 0;
-                    return rawParts.map((part, partIdx) => {
-                      if (part === "") return null;
-                      if (/^\s+$/.test(part)) {
-                        return part;
-                      }
+                        }
 
-                      const absoluteWordIndex = wordOffset;
-                      wordOffset++;
-
-                      const isActiveWord = isNarrationActive && narrationWordIndex === absoluteWordIndex;
-
-                      if (isActiveWord) {
-                        return (
-                          <span
-                            key={partIdx}
-                            className="bg-indigo-500/30 text-indigo-300 rounded px-1 transition-all duration-150 active-narrated-word"
-                            data-active-word="true"
-                          >
-                            {part}
-                          </span>
-                        );
-                      }
-
-                      return (
-                        <span key={partIdx}>
-                          {part}
-                        </span>
-                      );
-                    });
-                  })()
-                )}
+                        return <span key={partIdx}>{part}</span>;
+                      });
+                    })()}
               </p>
             </div>
 
@@ -1036,7 +1127,7 @@ if (isLoading) {
             {selectedStory && (
               <div className="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-xl p-6 mt-8 relative overflow-hidden">
                 <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-purple-500/5 rounded-full blur-3xl pointer-events-none"></div>
-                
+
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                   <div>
                     <h3 className="text-xl font-bold text-slate-200 flex items-center gap-2">
@@ -1046,13 +1137,15 @@ if (isLoading) {
                       Explore alternate narrative styles for your story context.
                     </p>
                   </div>
-                  {selectedStory.content !== originalStoryContent[selectedStory.uuid] && (
+                  {selectedStory.content !==
+                    originalStoryContent[selectedStory.uuid] && (
                     <button
                       type="button"
                       onClick={handleResetEnding}
                       className="rounded-lg px-4 py-2 bg-red-950/40 hover:bg-red-900/60 text-red-200 border border-red-700/50 font-semibold text-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
                     >
-                      <i className="fa-solid fa-rotate-left"></i> Reset to Original
+                      <i className="fa-solid fa-rotate-left"></i> Reset to
+                      Original
                     </button>
                   )}
                 </div>
@@ -1073,12 +1166,17 @@ if (isLoading) {
                         { name: "Dark Ending" },
                         { name: "Plot Twist Ending" },
                         { name: "Open Ending" },
-                        { name: "Cliffhanger Ending" }
+                        { name: "Cliffhanger Ending" },
                       ].map((s) => {
-                        const hasEndings = endingsCache[selectedStory.uuid] || [];
-                        const endingData = hasEndings.find((e) => e.style === s.name);
-                        const isApplied = endingData && selectedStory.content === endingData.fullStory;
-                        
+                        const hasEndings =
+                          endingsCache[selectedStory.uuid] || [];
+                        const endingData = hasEndings.find(
+                          (e) => e.style === s.name,
+                        );
+                        const isApplied =
+                          endingData &&
+                          selectedStory.content === endingData.fullStory;
+
                         return (
                           <button
                             key={s.name}
@@ -1101,12 +1199,16 @@ if (isLoading) {
 
                     {/* Tab content */}
                     {(() => {
-                      const currentEndings = endingsCache[selectedStory.uuid] || [];
-                      const currentEndingData = currentEndings.find((e) => e.style === activeEndingTab);
+                      const currentEndings =
+                        endingsCache[selectedStory.uuid] || [];
+                      const currentEndingData = currentEndings.find(
+                        (e) => e.style === activeEndingTab,
+                      );
                       if (!currentEndingData) return null;
-                      
-                      const isCurrentlyApplied = selectedStory.content === currentEndingData.fullStory;
-                      
+
+                      const isCurrentlyApplied =
+                        selectedStory.content === currentEndingData.fullStory;
+
                       return (
                         <div className="bg-slate-900/40 rounded-xl p-6 border border-slate-700/30">
                           <div className="flex justify-between items-center mb-4">
@@ -1116,12 +1218,15 @@ if (isLoading) {
                             <div>
                               {isCurrentlyApplied ? (
                                 <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full font-semibold flex items-center gap-1.5">
-                                  <i className="fa-solid fa-check"></i> Applied to Story
+                                  <i className="fa-solid fa-check"></i> Applied
+                                  to Story
                                 </span>
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={() => handleApplyEnding(currentEndingData)}
+                                  onClick={() =>
+                                    handleApplyEnding(currentEndingData)
+                                  }
                                   className="rounded-lg px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-bold text-sm transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-md hover:shadow-purple-500/20"
                                 >
                                   Apply to Story
@@ -1129,17 +1234,21 @@ if (isLoading) {
                               )}
                             </div>
                           </div>
-                          
+
                           <div className="space-y-4">
                             <div className="bg-slate-950/60 p-5 rounded-xl border border-slate-800 leading-relaxed text-slate-300 text-sm md:text-base italic shadow-inner whitespace-pre-wrap">
                               <p>{currentEndingData.ending}</p>
                             </div>
-                            
+
                             <div>
                               <details className="group border border-slate-800 rounded-lg overflow-hidden bg-slate-950/20">
                                 <summary className="list-none flex items-center justify-between p-3 text-xs font-bold text-slate-400 hover:text-slate-200 cursor-pointer select-none">
-                                  <span>PREVIEW FULL STORY WITH THIS ENDING</span>
-                                  <span className="transition-transform duration-200 group-open:rotate-180">Γû╝</span>
+                                  <span>
+                                    PREVIEW FULL STORY WITH THIS ENDING
+                                  </span>
+                                  <span className="transition-transform duration-200 group-open:rotate-180">
+                                    Γû╝
+                                  </span>
                                 </summary>
                                 <div className="p-4 border-t border-slate-800/80 text-xs text-slate-400 leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap">
                                   {currentEndingData.fullStory}
@@ -1161,7 +1270,9 @@ if (isLoading) {
                       Generate Alternate Endings
                     </button>
                     <p className="text-xs text-slate-400 mt-3 text-center max-w-sm px-4 leading-relaxed">
-                      Uses the story context to produce 5 unique ending variations (Happy, Dark, Plot Twist, Open, Cliffhanger) for comparison.
+                      Uses the story context to produce 5 unique ending
+                      variations (Happy, Dark, Plot Twist, Open, Cliffhanger)
+                      for comparison.
                     </p>
                   </div>
                 )}
@@ -1199,10 +1310,12 @@ if (isLoading) {
                       {selectedStory.tag.toUpperCase()}
                     </div>
                     <div className="inline-flex items-center rounded-full bg-indigo-600 py-1 px-3 text-xs font-semibold text-white shadow-sm">
-                      Γëí╞Æ├«├ë {(selectedStory.language || "English").toUpperCase()}
+                      Γëí╞Æ├«├ë{" "}
+                      {(selectedStory.language || "English").toUpperCase()}
                     </div>
                     <div className="inline-flex items-center rounded-full bg-slate-700 py-1 px-2.5 text-xs font-medium text-slate-300 shadow-sm gap-1">
-                      ╬ô├àΓûÆΓê⌐Γòò├à {calculateReadingTime(selectedStory.content)} min read
+                      ╬ô├àΓûÆΓê⌐Γòò├à{" "}
+                      {calculateReadingTime(selectedStory.content)} min read
                     </div>
                   </div>
                   <div>
