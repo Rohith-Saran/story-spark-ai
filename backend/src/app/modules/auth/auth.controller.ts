@@ -6,84 +6,62 @@ import sendResponse from "../../../shared/send_response";
 import { IUser } from "../user/user.interface";
 import catchAsync from "../../../shared/catch_async";
 import { setRefreshTokenCookie, clearRefreshTokenCookie } from "../../../utils/cookie.util";
-import jwt from "jsonwebtoken";
+import { Secret } from "jsonwebtoken";
 import { TokenBlacklist } from "./tokenBlacklist.model";
-import { OtpModel } from "./otp.model"; // Import OTP model
-import bcrypt from "bcrypt";
-import { UserModel } from "../user/user.model"; // Import User model
-import { generateAccessToken, generateRefreshToken } from "../../utils/token.utils"; // Import token utilities
+import { OtpModel } from "./otp.model";
+import { User } from "../user/user.model";
+import { JwtHelpers } from "../../../utils/jwt.helper";
+import config from "../../../config";
 import nodemailer from "nodemailer";
+import ApiError from "../../../errors/api_error";
+import { RefreshSession } from "./refresh_session.model";
+import crypto from "crypto";
 
-export const AuthController = {
-  // ...existing code...
+const buildClaims = (user: any) => ({
+  _id: user._id,
+  email: user.email,
+  role: user.role,
+  subscriptionType: user.subscriptionType,
+  name: user.name,
+  postsCount: user.postsCount,
+  tokenVersion: user.tokenVersion ?? 0,
+});
 
-  async sendOtp(req, res) {
-    const { email } = req.body;
+const generateAccessToken = (user: any): string =>
+  JwtHelpers.createToken(
+    buildClaims(user),
+    config.jwt.secret as Secret,
+    config.jwt.expires_in as string
+  );
 
-    try {
-      // Generate a random 6-digit OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+const sendOtp = catchAsync(async (req: Request, res: Response) => {
+  const { email } = req.body;
 
-      // Save OTP to the database
-      await OtpModel.create({ email, otp });
+  // Generate a random 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // Send OTP via email
-      const transporter = nodemailer.createTransport({
-        service: "Gmail",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
-        },
-      });
+  // Save OTP to the database
+  await OtpModel.create({ email, otp });
 
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: "Your OTP Code",
-        text: `Your OTP code is ${otp}. It will expire in 5 minutes.`,
-      });
+  // Send OTP via email
+  const transporter = nodemailer.createTransport({
+    service: "Gmail",
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
 
-      res.status(200).json({ message: "OTP sent successfully" });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Failed to send OTP" });
-    }
-  },
-};
-export const AuthController = {
-  async register(req, res) {
-    const { name, email, password, otp } = req.body;
+  await transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: "Your OTP Code",
+    text: `Your OTP code is ${otp}. It will expire in 5 minutes.`,
+  });
 
-    try {
-      // Check if OTP is provided
-      if (!otp) {
-        return res.status(400).json({ message: "OTP is required" });
-      }
+  res.status(200).json({ message: "OTP sent successfully" });
+});
 
-      // Validate OTP
-      const validOtp = await OtpModel.findOne({ email, otp });
-      if (!validOtp) {
-        return res.status(400).json({ message: "Invalid or expired OTP" });
-      }
-
-      // Proceed with user registration
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const newUser = await UserModel.create({ name, email, password: hashedPassword });
-
-      // Remove OTP after successful validation
-      await OtpModel.deleteOne({ email, otp });
-
-      // Generate tokens and respond
-      const accessToken = generateAccessToken(newUser);
-      const refreshToken = generateRefreshToken(newUser);
-      res.cookie("refreshToken", refreshToken, { httpOnly: true });
-      res.status(201).json({ accessToken });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  },
-};
 const login = catchAsync(async (req: Request, res: Response) => {
   const body: AuthModel = req.body;
   const result = await AuthService.login(body);
@@ -100,16 +78,46 @@ const login = catchAsync(async (req: Request, res: Response) => {
 });
 
 const register = catchAsync(async (req: Request, res: Response) => {
-  const body: IUser = req.body;
-  const result = await AuthService.register(body);
-  const { accessToken, refreshToken } = result;
+  const { name, email, password, otp } = req.body;
+
+  // Validate OTP
+  const validOtp = await OtpModel.findOne({ email, otp });
+  if (!validOtp) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Invalid or expired OTP");
+  }
+
+  // Check if user already exists
+  const isExistUser = await User.findOne({ email });
+  if (isExistUser) {
+    throw new ApiError(httpStatus.CONFLICT, "User already exists!");
+  }
+
+  // Create user (pre-save hook hashes password)
+  const newUser = await User.create({ name, email, password });
+
+  // Remove OTP after successful validation
+  await OtpModel.deleteOne({ email, otp });
+
+  // Generate tokens
+  const accessToken = generateAccessToken(newUser);
+  const refreshToken = JwtHelpers.createToken(
+    { _id: newUser._id, jti: crypto.randomUUID() },
+    config.jwt.refresh_secret as Secret,
+    config.jwt.refresh_expires_in as string
+  );
+
+  await RefreshSession.create({
+    userId: newUser._id,
+    jti: crypto.randomUUID(),
+    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+  });
 
   setRefreshTokenCookie(res, refreshToken);
 
   sendResponse(res, {
-    statusCode: httpStatus.OK,
+    statusCode: httpStatus.CREATED,
     success: true,
-    message: "User Register successfully!",
+    message: "User Registered successfully!",
     data: { accessToken },
   });
 });
@@ -119,7 +127,6 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
   const result = await AuthService.refreshToken(token as string);
   const { accessToken, refreshToken: rotatedRefreshToken } = result;
 
-  // Rotation: replace the cookie with the freshly issued refresh token.
   setRefreshTokenCookie(res, rotatedRefreshToken);
 
   sendResponse(res, {
@@ -183,7 +190,7 @@ const changePassword = catchAsync(async (req: Request, res: Response) => {
 
   await AuthService.changePassword(user, { oldPassword, newPassword });
 
-   sendResponse(res, {
+  sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Password changed successfully. All previous sessions have been invalidated.",
@@ -217,7 +224,7 @@ const resetPassword = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-       message: "Password reset successfully!",
+    message: "Password reset successfully!",
     data: { accessToken },
   });
 });
@@ -231,4 +238,5 @@ export const AuthController = {
   changePassword,
   forgotPassword,
   resetPassword,
+  sendOtp,
 };
