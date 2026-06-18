@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import ApiError from "../../errors/api_error";
 import httpStatus from "http-status";
 import { consumeRateLimit } from "./rate_limit.store";
+import rateLimit from "express-rate-limit";
 
 interface RateLimiterOptions {
   /** Time window in milliseconds */
@@ -18,6 +19,42 @@ interface RateLimiterOptions {
   buildMessage?: (retryAfterSec: number) => string;
 }
 
+class MongoRateLimitStore {
+  keyPrefix: string;
+  blockTimeMs: number;
+  options!: any;
+
+  constructor(keyPrefix: string, blockTimeMs: number) {
+    this.keyPrefix = keyPrefix;
+    this.blockTimeMs = blockTimeMs;
+  }
+
+  init(options: any) {
+    this.options = options;
+  }
+
+  async increment(key: string) {
+    const res = await consumeRateLimit({
+      key: `${this.keyPrefix}_${key}`,
+      windowMs: this.options.windowMs,
+      maxRequests: this.options.max,
+      blockTimeMs: this.blockTimeMs,
+    });
+
+    const now = Date.now();
+    return {
+      totalHits: res.allowed ? 1 : (this.options.max || 1) + 1,
+      resetTime: new Date(
+        now + (res.allowed ? this.options.windowMs : res.retryAfterSec * 1000)
+      ),
+    };
+  }
+
+  async resetKey(key: string): Promise<void> {
+    // No-op
+  }
+}
+
 /**
  * Factory that builds a rate-limiting middleware backed by the shared MongoDB
  * store, so limits hold across all serverless instances and cold starts.
@@ -26,33 +63,22 @@ interface RateLimiterOptions {
 export const createRateLimiter = (options: RateLimiterOptions) => {
   const { windowMs, maxRequests, blockTimeMs, keyPrefix, actionLabel = "request", buildMessage } = options;
 
-  return async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const ip = req.ip;
-      if (!ip) {
-        throw new ApiError(httpStatus.FORBIDDEN, "Could not determine client IP address.");
-      }
+  return rateLimit({
+    windowMs,
+    max: maxRequests,
+    store: new MongoRateLimitStore(keyPrefix, blockTimeMs) as any,
+    handler: (req: Request, res: Response, next: NextFunction) => {
+      const retryAfter = res.getHeader("Retry-After");
+      const retryAfterSec = retryAfter
+        ? parseInt(String(retryAfter), 10)
+        : Math.ceil(windowMs / 1000);
+      const message = buildMessage
+        ? buildMessage(retryAfterSec)
+        : `Too many ${actionLabel} attempts. Please try again after ${Math.ceil(retryAfterSec / 60)} minutes.`;
 
-      const { allowed, retryAfterSec } = await consumeRateLimit({
-        key: `${keyPrefix}_${ip}`,
-        windowMs,
-        maxRequests,
-        blockTimeMs,
-      });
-
-      if (!allowed) {
-        res.setHeader("Retry-After", String(retryAfterSec));
-        const message = buildMessage
-          ? buildMessage(retryAfterSec)
-          : `Too many ${actionLabel} attempts. Please try again after ${Math.ceil(retryAfterSec / 60)} minutes.`;
-        throw new ApiError(httpStatus.TOO_MANY_REQUESTS, message);
-      }
-
-      return next();
-    } catch (error) {
-      next(error);
-    }
-  };
+      next(new ApiError(httpStatus.TOO_MANY_REQUESTS, message));
+    },
+  } as any);
 };
 
 // ── Pre-configured rate limiters for authentication endpoints ──
