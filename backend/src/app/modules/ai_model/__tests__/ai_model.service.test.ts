@@ -135,7 +135,7 @@ describe("AiModelService", () => {
 
     await AiModelService.aiModelGenerate(
       { prompt: "test", wordLength: 100, numStories: 1, tone: "Dark" },
-      "test-user-id"
+      { _id: "test-user-id" } as any
     );
 
     expect(mockedGenerate).toHaveBeenCalledWith(
@@ -177,7 +177,7 @@ describe("AiModelService", () => {
 
     await AiModelService.aiModelGenerate(
       { prompt: "test", wordLength: 100, numStories: 1 },
-      "test-user-id"
+      { _id: "test-user-id" } as any
     );
 
     expect(mockedGenerate).toHaveBeenCalledWith(

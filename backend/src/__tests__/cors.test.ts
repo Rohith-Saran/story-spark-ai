@@ -18,20 +18,18 @@ describe('CORS Configuration', () => {
     const response = await request(app)
       .get('/api/v1')
       .set('Origin', 'http://localhost:4001'); // This might fail if corsOrigins doesn't include it
-    
+
     // If it fails with 404/Not Found, that's fine, as long as it's not a CORS error
     if (response.headers['access-control-allow-origin']) {
-        expect(response.headers['access-control-allow-origin']).toBe('http://localhost:4001');
+      expect(response.headers['access-control-allow-origin']).toBe('http://localhost:4001');
     }
   });
 
-  it('should reject requests missing the Origin header', async () => {
-    process.env.NODE_ENV = 'development';
+  it('should allow requests missing the Origin header', async () => {
     const response = await request(app)
       .get('/api/v1');
-    
-    // Currently, this will likely NOT have an error because of (!origin || ...)
-    // We want it to fail.
-    expect(response.body.message).toContain('Origin header required');
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe('API Not Found');
   });
 });

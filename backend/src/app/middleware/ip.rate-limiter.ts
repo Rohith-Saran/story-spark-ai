@@ -50,6 +50,10 @@ class MongoRateLimitStore {
     };
   }
 
+  async decrement(key: string): Promise<void> {
+    // No-op
+  }
+
   async resetKey(key: string): Promise<void> {
     // No-op
   }
