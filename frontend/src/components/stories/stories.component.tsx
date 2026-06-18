@@ -2213,11 +2213,11 @@ onKeyDown={(e) => {
     <div className="flex justify-end mt-2 w-full">
       <button
         type="submit"
-        disabled={loading || isOverLimit}
+        disabled={isGenerateDisabled}
         aria-busy={loading}
-        aria-disabled={loading || isOverLimit}
+        aria-disabled={isGenerateDisabled}
         className={`rounded-lg bg-gradient-to-r from-blue-400 to-indigo-500 text-gray-200 px-6 py-3 font-semibold ${
-          loading || isOverLimit
+          isGenerateDisabled
             ? "opacity-50 cursor-not-allowed"
             : "cursor-pointer hover:shadow-lg hover:shadow-indigo-500/50 hover:scale-105"
         } transition-all duration-300 transform flex items-center space-x-2 group`}
@@ -2447,3 +2447,5 @@ onKeyDown={(e) => {
 };
 
 export default StoriesViewComponent;
+
+
