@@ -142,7 +142,7 @@ const enhancePrompt = catchAsync(async (req: Request, res: Response) => {
       "prompt is required and must be at least 3 characters."
     );
   }
-  const post = storyId ? await Post.findById(storyId) : null;
+  const post = storyId ? await Post.findById(String(storyId)) : null;
   const rawProvider = req.headers?.["x-model-provider"];
   const provider = Array.isArray(rawProvider) ? rawProvider[0] : rawProvider;
 

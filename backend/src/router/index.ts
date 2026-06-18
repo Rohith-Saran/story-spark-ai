@@ -85,6 +85,10 @@ const modules = [
     path: "/bookmarks",
     router: BookmarkRouter,
   },
+  {
+    path: "/contact",
+    router: ContactRoutes,
+  },
 
   {
     path: "/story-consistency",

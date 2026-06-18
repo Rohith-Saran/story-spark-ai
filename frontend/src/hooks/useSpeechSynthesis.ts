@@ -57,6 +57,7 @@ export interface UseSpeechSynthesisResult {
   selectedLanguage: string;
   setSelectedLanguage: (lang: string) => void;
   languageOptions: LanguageOption[];
+  detectedLanguage?: string;
 }
 
 const hasSpeechSupport = (): boolean => {
@@ -108,10 +109,6 @@ const mapVoiceOption = (voice: SpeechSynthesisVoice): SpeechVoiceOption => ({
   localService: voice.localService,
   isDefault: voice.default,
 });
-
-const getPreferredLanguage = (): string => {
-  return window.navigator.language || "en-US";
-};
 
 const findVoiceForLanguage = (
   voices: SpeechVoiceOption[],
@@ -505,6 +502,23 @@ export const useSpeechSynthesis = (
     };
   }, [currentWordIndex, isSpeaking, isPaused]);
 
+  const detectedLanguage = useMemo(() => {
+    if (!text) return "en";
+    const lower = text.toLowerCase();
+    const esWords = /\b(el|la|los|las|un|una|y|o|en|que|de|del|es|son|por|para|con|como|si|no)\b/g;
+    const frWords = /\b(le|la|les|un|une|et|ou|dans|que|de|des|est|sont|par|pour|avec|comme|si|ne|pas)\b/g;
+    const deWords = /\b(der|die|das|ein|eine|und|oder|in|dass|von|ist|sind|mit|wie|wenn|nicht|zu)\b/g;
+    const esMatches = (lower.match(esWords) || []).length;
+    const frMatches = (lower.match(frWords) || []).length;
+    const deMatches = (lower.match(deWords) || []).length;
+    const max = Math.max(esMatches, frMatches, deMatches);
+    if (max === 0) return "en";
+    if (max === esMatches) return "es";
+    if (max === frMatches) return "fr";
+    if (max === deMatches) return "de";
+    return "en";
+  }, [text]);
+
   return {
     isPlaying: isSpeaking && !isPaused,
     isPaused,
@@ -536,6 +550,7 @@ export const useSpeechSynthesis = (
     selectedLanguage,
     setSelectedLanguage: handleSetSelectedLanguage,
     languageOptions,
+    detectedLanguage,
   };
 };
 

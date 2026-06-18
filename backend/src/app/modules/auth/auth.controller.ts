@@ -41,7 +41,7 @@ const sendOtp = catchAsync(async (req: Request, res: Response) => {
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
   // Save OTP to the database
-  await OtpModel.create({ email, otp });
+  await OtpModel.create({ email: String(email), otp });
 
   // Send OTP via email
   const transporter = nodemailer.createTransport({
@@ -54,7 +54,7 @@ const sendOtp = catchAsync(async (req: Request, res: Response) => {
 
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
-    to: email,
+    to: String(email),
     subject: "Your OTP Code",
     text: `Your OTP code is ${otp}. It will expire in 5 minutes.`,
   });
@@ -81,22 +81,22 @@ const register = catchAsync(async (req: Request, res: Response) => {
   const { name, email, password, otp } = req.body;
 
   // Validate OTP
-  const validOtp = await OtpModel.findOne({ email, otp });
+  const validOtp = await OtpModel.findOne({ email: String(email), otp: String(otp) });
   if (!validOtp) {
     throw new ApiError(httpStatus.BAD_REQUEST, "Invalid or expired OTP");
   }
 
   // Check if user already exists
-  const isExistUser = await User.findOne({ email });
+  const isExistUser = await User.findOne({ email: String(email) });
   if (isExistUser) {
     throw new ApiError(httpStatus.CONFLICT, "User already exists!");
   }
 
   // Create user (pre-save hook hashes password)
-  const newUser = await User.create({ name, email, password });
+  const newUser = await User.create({ name: String(name), email: String(email), password: String(password) });
 
   // Remove OTP after successful validation
-  await OtpModel.deleteOne({ email, otp });
+  await OtpModel.deleteOne({ email: String(email), otp: String(otp) });
 
   // Generate tokens
   const accessToken = generateAccessToken(newUser);

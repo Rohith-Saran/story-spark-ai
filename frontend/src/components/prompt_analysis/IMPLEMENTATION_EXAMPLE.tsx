@@ -7,7 +7,7 @@
  * LOCATION: After line 575 in stories.component.tsx (after textareaValue state declaration)
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { useForm, SubmitHandler } from "react-hook-form";
 import toast from "react-hot-toast";
 import PromptAnalysisIntegration from "../prompt_analysis/PromptAnalysisIntegration";
