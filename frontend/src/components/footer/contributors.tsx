@@ -7,9 +7,9 @@ import {
   ExternalLink,
   Code2,
   Trophy,
+  GitBranch,
+  MessageCircle,
 } from "lucide-react";
-
-import { Github, Twitter, Linkedin } from "lucide-react";
 
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
