@@ -50,20 +50,6 @@ const NavListComponent = () => {
     }),
   };
 
-  const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `relative flex h-10 items-center rounded-full px-4 text-sm font-semibold transition-all duration-300 ${
-      isActive
-        ? "text-slate-900 dark:text-white"
-        : "text-slate-700 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
-    }`;
-
-  const mobileLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `block rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
-      isActive
-        ? "bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white"
-        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
-    }`;
-
   return (
     <header className="sticky top-0 z-50 w-full">
       <div className="absolute inset-0 border-b border-slate-200/70 bg-white/70 shadow-sm shadow-slate-900/5 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/70 dark:shadow-black/20" />
